@@ -12,6 +12,7 @@ import {
   User,
   Auth,
 } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
 import { UserProfile } from '../types';
 
 // Default configuration provided for CleanMeta project
@@ -36,6 +37,7 @@ export const isFirebaseConfigured = Boolean(apiKey && projectId && authDomain);
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
+let db: Firestore | null = null;
 let googleProvider: GoogleAuthProvider | null = null;
 
 if (isFirebaseConfigured) {
@@ -52,10 +54,25 @@ if (isFirebaseConfigured) {
       : getApps()[0];
 
     auth = getAuth(app);
+    db = getFirestore(app);
     googleProvider = new GoogleAuthProvider();
     googleProvider.setCustomParameters({ prompt: 'select_account' });
   } catch (err) {
     console.warn('Firebase initialization error:', err);
+  }
+}
+
+export { auth, db };
+
+/**
+ * Retrieves the current authenticated user's ID token for secure backend verification
+ */
+export async function getCurrentUserToken(): Promise<string | null> {
+  if (!auth || !auth.currentUser) return null;
+  try {
+    return await auth.currentUser.getIdToken(false);
+  } catch {
+    return null;
   }
 }
 

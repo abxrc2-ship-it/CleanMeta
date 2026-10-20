@@ -21,10 +21,10 @@ export async function downloadCleanPhotosAsZip(
   // Avoid duplicate names in the ZIP archive
   const usedNames = new Set<string>();
 
-  for (let i = 0; i < cleanedPhotos.length; i++) {
+    for (let i = 0; i < cleanedPhotos.length; i++) {
     const photo = cleanedPhotos[i];
     const mime = photo.cleanedFormat || photo.type || 'image/jpeg';
-    let filename = getSafeCleanFilename(photo.name, mime);
+    let filename = getSafeCleanFilename(photo.name, mime, i);
 
     // Ensure distinct names
     let counter = 1;

@@ -14,6 +14,7 @@ import {
   Layers,
   Settings2,
   SlidersHorizontal,
+  Minimize2,
 } from 'lucide-react';
 import { CleanFormatPreference, PhotoItem } from '../types';
 import { formatBytes } from '../lib/imageProcessor';
@@ -30,6 +31,9 @@ interface QueueListProps {
   onComparePhoto: (photo: PhotoItem) => void;
   formatPreference: CleanFormatPreference;
   onChangeFormatPreference: (format: CleanFormatPreference) => void;
+  retentionPreference: import('../types').RetentionPreference;
+  onChangeRetentionPreference: (retention: import('../types').RetentionPreference) => void;
+  onSendToTool?: (tool: import('../types').ToolType, file: File) => void;
   isProcessing: boolean;
   isZipping: boolean;
   zipProgress: number;
@@ -46,6 +50,9 @@ export const QueueList: React.FC<QueueListProps> = ({
   onComparePhoto,
   formatPreference,
   onChangeFormatPreference,
+  retentionPreference,
+  onChangeRetentionPreference,
+  onSendToTool,
   isProcessing,
   isZipping,
   zipProgress,
@@ -79,7 +86,7 @@ export const QueueList: React.FC<QueueListProps> = ({
             </p>
           </div>
 
-          {/* Format preference dropdown & Clear Queue */}
+          {/* Format & Retention preference dropdowns & Clear Queue */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs">
               <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
@@ -97,6 +104,27 @@ export const QueueList: React.FC<QueueListProps> = ({
                 <option value="jpeg" className="dark:bg-slate-800">JPG (High Quality 95%)</option>
                 <option value="png" className="dark:bg-slate-800">PNG (Lossless)</option>
                 <option value="webp" className="dark:bg-slate-800">WebP (Optimized)</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs">
+              <label htmlFor="retention-select" className="text-slate-600 dark:text-slate-300 font-medium">
+                Storage:
+              </label>
+              <select
+                id="retention-select"
+                value={retentionPreference}
+                onChange={(e) => onChangeRetentionPreference(e.target.value as any)}
+                disabled={isProcessing}
+                className="bg-transparent font-semibold text-slate-800 dark:text-slate-100 focus:outline-none cursor-pointer"
+              >
+                <option value="none" className="dark:bg-slate-800">Local Only (অফলাইন - কোনো ক্লাউড নয়)</option>
+                <option value="1day" className="dark:bg-slate-800">Cloud: 1 Day (১ দিন)</option>
+                <option value="2days" className="dark:bg-slate-800">Cloud: 2 Days (২ দিন)</option>
+                <option value="3days" className="dark:bg-slate-800">Cloud: 3 Days (৩ দিন)</option>
+                <option value="4days" className="dark:bg-slate-800">Cloud: 4 Days (৪ দিন)</option>
+                <option value="7days" className="dark:bg-slate-800">Cloud: 7 Days (৭ দিন)</option>
+                <option value="permanent" className="dark:bg-slate-800">Cloud: Permanent (সর্বোচ্চ আনলিমিটেড)</option>
               </select>
             </div>
 
@@ -276,13 +304,46 @@ export const QueueList: React.FC<QueueListProps> = ({
 
                   {/* Download single clean photo */}
                   {isClean && (
-                    <button
-                      onClick={() => downloadSinglePhoto(photo)}
-                      className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download Clean Photo</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => downloadSinglePhoto(photo)}
+                        className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Clean Photo</span>
+                      </button>
+
+                      {onSendToTool && photo.cleanedBlob && (
+                        <div className="hidden sm:flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const f = new File([photo.cleanedBlob!], photo.name, {
+                                type: photo.cleanedFormat || photo.type,
+                              });
+                              onSendToTool('converter', f);
+                            }}
+                            title="Open in Converter"
+                            className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 dark:text-blue-400 text-xs font-bold"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const f = new File([photo.cleanedBlob!], photo.name, {
+                                type: photo.cleanedFormat || photo.type,
+                              });
+                              onSendToTool('compressor', f);
+                            }}
+                            title="Open in Compressor"
+                            className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-purple-600 dark:text-purple-400 text-xs font-bold"
+                          >
+                            <Minimize2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* Processing spinner */}

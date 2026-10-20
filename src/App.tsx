@@ -14,13 +14,19 @@ import { HowItWorksModal } from './components/HowItWorksModal';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { AccountModal } from './components/AccountModal';
 import { AuthModal } from './components/AuthModal';
+import { ConverterTool } from './components/ConverterTool';
+import { CompressorTool } from './components/CompressorTool';
+import { BackgroundRemoverTool } from './components/BackgroundRemoverTool';
+import { HistoryView } from './components/HistoryView';
 import { Footer } from './components/Footer';
-import { CleanFormatPreference, PhotoItem, UserProfile } from './types';
+import { CleanFormatPreference, PhotoItem, RetentionPreference, ToolType, UserProfile } from './types';
 import { extractMetadata } from './lib/metadata';
 import { processAndCleanImage } from './lib/imageProcessor';
 import { downloadCleanPhotosAsZip } from './lib/zipDownloader';
 import { subscribeToAuthState } from './lib/firebase';
-import { Sparkles } from 'lucide-react';
+import { saveHistoryRecord } from './lib/firestore';
+import { uploadToVercelBlob } from './lib/blobStorage';
+import { Sparkles, Wifi, WifiOff, Cloud } from 'lucide-react';
 
 export default function App() {
   // Theme state
@@ -33,12 +39,37 @@ export default function App() {
   // User auth state
   const [user, setUser] = useState<UserProfile | null>(null);
 
-  // Photos state
+  // Active navigation tab
+  const [activeTab, setActiveTab] = useState<ToolType | 'history'>('metadata-remover');
+
+  // Metadata Remover state
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [formatPreference, setFormatPreference] = useState<CleanFormatPreference>('auto');
+  const [retentionPreference, setRetentionPreference] = useState<RetentionPreference>('none');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
+
+  // Online / Offline status & App mode (Local vs Cloud)
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [appMode, setAppMode] = useState<'local' | 'cloud'>('local');
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => {
+      setIsOnline(false);
+      setAppMode('local');
+      setRetentionPreference('none');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Modals state
   const [inspectingPhoto, setInspectingPhoto] = useState<PhotoItem | null>(null);
@@ -94,12 +125,10 @@ export default function App() {
 
     setPhotos((prev) => [...prev, ...newItems]);
 
-    // Inspect metadata & dimensions asynchronously for each new item
     for (const item of newItems) {
       try {
         const metadata = await extractMetadata(item.file);
 
-        // Load dimensions
         const img = new Image();
         img.src = item.originalUrl;
         await new Promise((resolve) => {
@@ -124,7 +153,7 @@ export default function App() {
               : p
           )
         );
-      } catch (err) {
+      } catch {
         setPhotos((current) =>
           current.map((p) =>
             p.id === item.id
@@ -162,7 +191,7 @@ export default function App() {
     setComparingPhoto(null);
   };
 
-  // Process a single photo item
+  // Process a single photo item (immediate UI update!)
   const processPhotoItem = async (photo: PhotoItem, formatPref: CleanFormatPreference) => {
     try {
       const result = await processAndCleanImage(photo.file, {
@@ -172,6 +201,7 @@ export default function App() {
 
       const cleanedUrl = URL.createObjectURL(result.blob);
 
+      // 1. Instantly mark as cleaned in UI (stops spinning immediately!)
       setPhotos((prev) =>
         prev.map((p) =>
           p.id === photo.id
@@ -188,6 +218,47 @@ export default function App() {
             : p
         )
       );
+
+      // 2. Perform cloud upload & history save in the background
+      (async () => {
+        let blobUrl: string | undefined;
+        let blobPathname: string | undefined;
+        let expiresAt: number | undefined;
+
+        if (retentionPreference !== 'none' && user) {
+          try {
+            const uploadRes = await uploadToVercelBlob(
+              result.blob,
+              `clean-${photo.name}`,
+              retentionPreference,
+              'metadata-remover'
+            );
+            if (uploadRes.success) {
+              blobUrl = uploadRes.blobUrl;
+              blobPathname = uploadRes.blobPathname;
+              expiresAt = uploadRes.expiresAt;
+            }
+          } catch (e: any) {
+            console.warn('Background upload notice:', e.message);
+          }
+        }
+
+        if (user) {
+          saveHistoryRecord(user.uid, {
+            tool: 'metadata-remover',
+            originalFileName: photo.name,
+            inputFormat: photo.type,
+            outputFormat: result.outputFormat,
+            originalSize: photo.size,
+            processedSize: result.blob.size,
+            status: 'success',
+            retention: retentionPreference,
+            blobUrl,
+            blobPathname,
+            expiresAt,
+          }).catch(() => {});
+        }
+      })();
     } catch (err: any) {
       setPhotos((prev) =>
         prev.map((p) =>
@@ -208,17 +279,21 @@ export default function App() {
     const pendingPhotos = photos.filter((p) => p.status === 'queued' || p.status === 'error');
     if (pendingPhotos.length === 0) return;
 
-    setIsProcessing(true);
+    try {
+      setIsProcessing(true);
 
-    for (const photo of pendingPhotos) {
-      setPhotos((prev) =>
-        prev.map((p) => (p.id === photo.id ? { ...p, status: 'processing', errorMessage: undefined } : p))
-      );
+      for (const photo of pendingPhotos) {
+        setPhotos((prev) =>
+          prev.map((p) => (p.id === photo.id ? { ...p, status: 'processing', errorMessage: undefined } : p))
+        );
 
-      await processPhotoItem(photo, formatPreference);
+        await processPhotoItem(photo, formatPreference);
+      }
+    } catch (err) {
+      console.error('Batch process error:', err);
+    } finally {
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   };
 
   // Retry individual photo
@@ -226,11 +301,17 @@ export default function App() {
     const photo = photos.find((p) => p.id === id);
     if (!photo) return;
 
-    setPhotos((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: 'processing', errorMessage: undefined } : p))
-    );
+    try {
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, status: 'processing', errorMessage: undefined } : p))
+      );
 
-    await processPhotoItem(photo, formatPreference);
+      await processPhotoItem(photo, formatPreference);
+    } catch (err: any) {
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, status: 'error', errorMessage: err.message || 'Retry failed.' } : p))
+      );
+    }
   };
 
   // Download ZIP
@@ -247,7 +328,15 @@ export default function App() {
     }
   };
 
-  // Helper to load a demo sample photo
+  // Transfer output from one tool to another pipeline
+  const handleTransferToTool = (tool: ToolType, file: File) => {
+    setActiveTab(tool);
+    if (tool === 'metadata-remover') {
+      handleFilesSelected([file]);
+    }
+  };
+
+  // Helper demo sample photo
   const handleLoadSamplePhoto = async () => {
     try {
       const sampleCanvas = document.createElement('canvas');
@@ -309,48 +398,198 @@ export default function App() {
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
         user={user}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         onOpenAccount={() => setAccountOpen(true)}
         onOpenHowItWorks={() => setHowItWorksOpen(true)}
         onOpenPrivacy={() => setPrivacyOpen(true)}
         onOpenAuth={() => setAuthModalOpen(true)}
+        isOnline={isOnline}
+        activeMode={appMode}
+        onToggleMode={() => {
+          if (appMode === 'local') {
+            if (!user) {
+              setAuthModalOpen(true);
+            } else {
+              setAppMode('cloud');
+              if (retentionPreference === 'none') {
+                setRetentionPreference('4days');
+              }
+            }
+          } else {
+            setAppMode('local');
+            setRetentionPreference('none');
+          }
+        }}
       />
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col">
-        <Hero />
-
-        {/* Upload Box */}
-        <UploadZone onFilesSelected={handleFilesSelected} isProcessing={isProcessing} />
-
-        {/* Sample Photo Helper Button */}
-        {photos.length === 0 && (
-          <div className="text-center mt-5 mb-8">
-            <button
-              onClick={handleLoadSamplePhoto}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-900 transition cursor-pointer"
+      {/* Online & Offline Dual Mode Selector Banner */}
+      <div className="w-full max-w-4xl mx-auto px-4 pt-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 sm:px-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div
+              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                !isOnline
+                  ? 'bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400'
+                  : appMode === 'local'
+                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400'
+              }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Don't have a photo handy? Try a sample photo</span>
+              {!isOnline ? (
+                <WifiOff className="w-4 h-4" />
+              ) : appMode === 'local' ? (
+                <Wifi className="w-4 h-4" />
+              ) : (
+                <Cloud className="w-4 h-4" />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  {!isOnline
+                    ? 'অফলাইন মোড (লোকাল ইঞ্জিন সক্রিয়)'
+                    : appMode === 'local'
+                    ? 'লোকাল মোড (১০০% অফলাইন ও প্রাইভেট)'
+                    : 'ক্লাউড স্টোরেজ মোড (অনলাইন ব্যাকআপ)'}
+                </span>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    !isOnline
+                      ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                      : appMode === 'local'
+                      ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                      : 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                  }`}
+                >
+                  {!isOnline ? 'Offline Safe' : appMode === 'local' ? '100% Local / Zero Upload' : 'Cloud Sync Active'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {!isOnline
+                  ? 'ইন্টারনেট ছাড়াই সমস্ত টুল সম্পূর্ণ কাজ করছে। ছবি সরাসরি আপনার ডিভাইসে সেভ হবে।'
+                  : appMode === 'local'
+                  ? 'কোনো সার্ভারে আপলোড নেই। ছবি ব্রাউজার মেমোরিতে প্রসেস ও সরাসরি ডাউনলোড হয়।'
+                  : 'প্রসেস করা ছবি নিরাপদে আপনার ক্লাউড স্টোরেজে সেভ থাকবে (সর্বোচ্চ মেয়াদ পর্যন্ত)।'}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Toggle Controls */}
+          <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setAppMode('local');
+                setRetentionPreference('none');
+              }}
+              className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                appMode === 'local'
+                  ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Wifi className="w-3.5 h-3.5" />
+              <span>লোকাল (অফলাইন)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!user) {
+                  setAuthModalOpen(true);
+                } else {
+                  setAppMode('cloud');
+                  if (retentionPreference === 'none') {
+                    setRetentionPreference('4days');
+                  }
+                }
+              }}
+              className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                appMode === 'cloud'
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Cloud className="w-3.5 h-3.5" />
+              <span>ক্লাউড স্টোরেজ</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Main Content Rendered According to Active Tab */}
+      <main className="flex-1 flex flex-col">
+        {activeTab === 'metadata-remover' && (
+          <>
+            <Hero />
+            <UploadZone onFilesSelected={handleFilesSelected} isProcessing={isProcessing} />
+
+            {photos.length === 0 && (
+              <div className="text-center mt-5 mb-8">
+                <button
+                  onClick={handleLoadSamplePhoto}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-900 transition cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Don't have a photo handy? Try a sample photo</span>
+                </button>
+              </div>
+            )}
+
+            <QueueList
+              photos={photos}
+              onRemovePhoto={handleRemovePhoto}
+              onClearQueue={handleClearQueue}
+              onProcessAll={handleProcessAll}
+              onRetryPhoto={handleRetryPhoto}
+              onDownloadZip={handleDownloadZip}
+              onInspectMetadata={(photo) => setInspectingPhoto(photo)}
+              onComparePhoto={(photo) => setComparingPhoto(photo)}
+              formatPreference={formatPreference}
+              onChangeFormatPreference={setFormatPreference}
+              retentionPreference={retentionPreference}
+              onChangeRetentionPreference={(r) => {
+                if (r !== 'none' && !user) {
+                  setAuthModalOpen(true);
+                } else {
+                  setRetentionPreference(r);
+                }
+              }}
+              onSendToTool={handleTransferToTool}
+              isProcessing={isProcessing}
+              isZipping={isZipping}
+              zipProgress={zipProgress}
+            />
+          </>
         )}
 
-        {/* Queue & Action Results */}
-        <QueueList
-          photos={photos}
-          onRemovePhoto={handleRemovePhoto}
-          onClearQueue={handleClearQueue}
-          onProcessAll={handleProcessAll}
-          onRetryPhoto={handleRetryPhoto}
-          onDownloadZip={handleDownloadZip}
-          onInspectMetadata={(photo) => setInspectingPhoto(photo)}
-          onComparePhoto={(photo) => setComparingPhoto(photo)}
-          formatPreference={formatPreference}
-          onChangeFormatPreference={setFormatPreference}
-          isProcessing={isProcessing}
-          isZipping={isZipping}
-          zipProgress={zipProgress}
-        />
+        {activeTab === 'bg-remover' && (
+          <BackgroundRemoverTool
+            user={user}
+            onSendToTool={handleTransferToTool}
+          />
+        )}
+
+        {activeTab === 'converter' && (
+          <ConverterTool
+            user={user}
+            onOpenAuth={() => setAuthModalOpen(true)}
+            onSendToTool={handleTransferToTool}
+          />
+        )}
+
+        {activeTab === 'compressor' && (
+          <CompressorTool
+            user={user}
+            onOpenAuth={() => setAuthModalOpen(true)}
+            onSendToTool={handleTransferToTool}
+          />
+        )}
+
+        {activeTab === 'history' && (
+          <HistoryView user={user} onOpenAuth={() => setAuthModalOpen(true)} />
+        )}
       </main>
 
       {/* Footer */}

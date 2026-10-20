@@ -49,8 +49,30 @@ export async function processAndCleanImage(
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
 
-    // Prevent caching quirks
-    img.crossOrigin = 'anonymous';
+    let isSettled = false;
+    const timeoutId = setTimeout(() => {
+      if (!isSettled) {
+        isSettled = true;
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Image processing timed out. Please try a different or smaller photo.'));
+      }
+    }, 12000); // 12-second safety timeout so buttons never hang indefinitely
+
+    const safeResolve = (res: ProcessedImageResult) => {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timeoutId);
+        resolve(res);
+      }
+    };
+
+    const safeReject = (err: Error) => {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timeoutId);
+        reject(err);
+      }
+    };
 
     img.onload = async () => {
       let canvas: HTMLCanvasElement | null = document.createElement('canvas');
@@ -136,7 +158,7 @@ export async function processAndCleanImage(
           }
 
           if (!blob) {
-            reject(new Error('Failed to encode clean photo to blob.'));
+            safeReject(new Error('Failed to encode clean photo to blob.'));
             return;
           }
 
@@ -144,16 +166,16 @@ export async function processAndCleanImage(
             // Verify output with ExifReader to ensure no residual tags remain
             const verification = await verifyCleanedBlob(blob);
 
-            resolve({
+            safeResolve({
               blob,
               width,
               height,
               outputFormat: outputMime,
               verification,
             });
-          } catch (vErr) {
+          } catch {
             // Even if verification inspect has an issue, the canvas blob is guaranteed clean
-            resolve({
+            safeResolve({
               blob,
               width,
               height,
@@ -177,7 +199,7 @@ export async function processAndCleanImage(
 
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error('Failed to decode image. File may be corrupted or unsupported.'));
+      safeReject(new Error('Failed to decode image. File may be corrupted or unsupported.'));
     };
 
     img.src = objectUrl;
@@ -197,18 +219,30 @@ export function formatBytes(bytes: number, decimals = 1): string {
 }
 
 /**
- * Safe filename generator: original-name-clean.ext
+ * Safe filename generator conforming to CleanMeta branding: cleanmeta-YYYY-MM-DD-001.ext
  */
-export function getSafeCleanFilename(originalName: string, mimeType: string): string {
-  const dotIndex = originalName.lastIndexOf('.');
-  const base = (dotIndex !== -1 ? originalName.slice(0, dotIndex) : originalName)
-    .replace(/[^a-zA-Z0-9_-]/g, '_')
-    .slice(0, 50);
+export function getSafeCleanFilename(originalName: string, mimeType: string, index?: number): string {
+  const d = new Date();
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const dateStr = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
   let ext = 'jpg';
   if (mimeType === 'image/png') ext = 'png';
   else if (mimeType === 'image/webp') ext = 'webp';
   else if (mimeType === 'image/jpeg') ext = 'jpg';
+  else {
+    const dotIdx = originalName.lastIndexOf('.');
+    if (dotIdx !== -1) {
+      ext = originalName.slice(dotIdx + 1).toLowerCase();
+      if (ext === 'jpeg') ext = 'jpg';
+    }
+  }
 
-  return `${base}-clean.${ext}`;
+  if (index !== undefined) {
+    const serial = String(index + 1).padStart(3, '0');
+    return `cleanmeta-${dateStr}-${serial}.${ext}`;
+  }
+
+  const timeStr = `${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+  return `cleanmeta-${dateStr}-${timeStr}.${ext}`;
 }
