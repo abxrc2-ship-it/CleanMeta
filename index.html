@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <title>CleanMeta — Free Online Photo Metadata Remover</title>
+    <meta name="description" content="Remove supported photo metadata, including location and camera information, with a privacy-focused image cleaning tool directly in your browser." />
+    
+    <!-- Extension compatibility safeguard for window.fetch -->
+    <script>
+      (function() {
+        try {
+          var originalFetch = window.fetch;
+          Object.defineProperty(window, 'fetch', {
+            get: function() {
+              return originalFetch;
+            },
+            set: function(newFetch) {
+              originalFetch = newFetch;
+            },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {
+          // ignore if already non-configurable
+        }
+
+        // Suppress unhandled errors from external browser extensions
+        window.addEventListener('error', function(event) {
+          if (event && event.filename && event.filename.startsWith('chrome-extension://')) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+      })();
+    </script>
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="CleanMeta — Free Online Photo Metadata Remover" />
+    <meta property="og:description" content="Remove supported photo metadata, including location and camera information, with a privacy-focused image cleaning tool directly in your browser." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="CleanMeta — Free Online Photo Metadata Remover" />
+    <meta name="twitter:description" content="Remove supported photo metadata, including location and camera information, with a privacy-focused image cleaning tool directly in your browser." />
+    <meta name="theme-color" content="#2563eb" />
+
+    <!-- Privacy Shield Icon Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/><path d='m9 12 2 2 4-4'/></svg>" />
+  </head>
+  <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased min-h-screen selection:bg-blue-500 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

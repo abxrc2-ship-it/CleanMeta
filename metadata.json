@@ -1,0 +1,6 @@
+{
+  "name": "CleanMeta — Photo Metadata Remover",
+  "description": "Privacy-focused mobile-first tool to remove EXIF, GPS, camera details, and embedded metadata directly in your browser.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
