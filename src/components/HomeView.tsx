@@ -282,10 +282,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
 
             {/* CTA Buttons */}
-            <div className="flex flex-wrap items-center gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
               <button
                 onClick={() => onNavigate('all-tools')}
-                className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-sm shadow-lg shadow-blue-600/30 transition flex items-center gap-2 cursor-pointer group hover:scale-[1.02]"
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-sm shadow-lg shadow-blue-600/30 transition flex items-center justify-center gap-2 cursor-pointer group hover:scale-[1.02]"
               >
                 <span>Explore All Tools</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -293,7 +293,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
               <button
                 onClick={onOpenHowItWorks}
-                className={`px-5 py-3 rounded-xl border font-semibold text-sm transition flex items-center gap-2 cursor-pointer hover:scale-[1.02] ${
+                className={`w-full sm:w-auto px-5 py-3 rounded-xl border font-semibold text-sm transition flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] ${
                   darkMode
                     ? 'bg-neutral-900/90 hover:bg-neutral-800 border-neutral-700 text-white'
                     : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800'
@@ -909,7 +909,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <span>You're on the list! We'll notify you on launch.</span>
               </div>
             ) : (
-              <form onSubmit={handleNotifySubmit} className="flex gap-2">
+              <form onSubmit={handleNotifySubmit} className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="email"
                   placeholder="Enter email for early access..."
@@ -919,7 +919,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 />
                 <button
                   type="submit"
-                  className="px-3.5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs transition cursor-pointer shrink-0 shadow-sm hover:scale-[1.02]"
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs transition cursor-pointer shrink-0 shadow-sm hover:scale-[1.02]"
                 >
                   Notify Me
                 </button>

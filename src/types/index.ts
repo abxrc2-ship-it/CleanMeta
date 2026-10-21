@@ -120,9 +120,18 @@ export type NavigationTab =
   | 'help'
   | 'about'
   | 'settings'
+  | 'admin'
   | ToolType;
 
-export type RetentionPreference = 'none' | '1day' | '2days' | '3days' | '4days' | '7days' | 'permanent';
+export type RetentionPreference =
+  | 'none'
+  | '3hours'
+  | '6hours'
+  | '12hours'
+  | '24hours'
+  | '48hours'
+  | '1day'
+  | '2days';
 
 export interface HistoryRecord {
   id: string;

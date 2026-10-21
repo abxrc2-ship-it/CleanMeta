@@ -16,6 +16,8 @@ import { HowItWorksModal } from './components/HowItWorksModal';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
+import { AccountSettingsView } from './components/AccountSettingsView';
+import { AdminView } from './components/AdminView';
 
 // Image Tools
 import { ConverterTool } from './components/ConverterTool';
@@ -73,6 +75,20 @@ export default function App() {
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<NavigationTab>('home');
+
+  // Storage Mode: 'local' (Green - Local Sandbox RAM) vs 'cloud' (Red - 1 GB Web Server)
+  const [storageMode, setStorageMode] = useState<'local' | 'cloud'>(() => {
+    const saved = localStorage.getItem('cleanmeta-storage-mode');
+    return saved === 'cloud' ? 'cloud' : 'local';
+  });
+
+  const toggleStorageMode = () => {
+    setStorageMode((prev) => {
+      const next = prev === 'local' ? 'cloud' : 'local';
+      localStorage.setItem('cleanmeta-storage-mode', next);
+      return next;
+    });
+  };
 
   // Favorites state
   const [favorites, setFavorites] = useState<string[]>(() => {
@@ -319,6 +335,8 @@ export default function App() {
         favoritesCount={favorites.length}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        storageMode={storageMode}
+        onToggleStorageMode={toggleStorageMode}
       />
 
       {/* Main content wrapper shifted 240px on desktop */}
@@ -330,10 +348,12 @@ export default function App() {
           user={user}
           activeTab={activeTab}
           onTabChange={(tab) => setActiveTab(tab)}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => setActiveTab('settings')}
           onOpenAuth={() => setAuthModalOpen(true)}
           onOpenSidebar={() => setSidebarOpen(true)}
           favoritesCount={favorites.length}
+          storageMode={storageMode}
+          onToggleStorageMode={toggleStorageMode}
         />
 
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col">
@@ -360,6 +380,10 @@ export default function App() {
               onChangeFormatPreference={setFormatPreference}
               retentionPreference={retentionPreference}
               onChangeRetentionPreference={setRetentionPreference}
+              user={user}
+              onNavigate={(tab) => setActiveTab(tab)}
+              storageMode={storageMode}
+              onToggleStorageMode={toggleStorageMode}
             />
           )}
 
@@ -444,8 +468,36 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'pricing' && <PricingView />}
+          {activeTab === 'pricing' && <PricingView onNavigate={(tab) => setActiveTab(tab)} />}
           {(activeTab === 'help' || activeTab === 'about') && <HelpAboutView />}
+          {activeTab === 'admin' && (
+            <AdminView
+              user={user}
+              onOpenAuth={() => setAuthModalOpen(true)}
+              onNavigateHome={() => setActiveTab('home')}
+            />
+          )}
+
+          {/* VIEW: ACCOUNT & SETTINGS (Dedicated full page view) */}
+          {(activeTab === 'settings' || (activeTab as string) === 'account') && (
+            <AccountSettingsView
+              user={user}
+              onUserUpdate={(u) => setUser(u)}
+              onOpenAuth={() => setAuthModalOpen(true)}
+              darkMode={darkMode}
+              onToggleDarkMode={() => setDarkMode(!darkMode)}
+              storageMode={storageMode}
+              onChangeStorageMode={(m) => {
+                setStorageMode(m);
+                localStorage.setItem('cleanmeta-storage-mode', m);
+              }}
+              retentionPreference={retentionPreference}
+              onChangeRetentionPreference={setRetentionPreference}
+              formatPreference={formatPreference}
+              onChangeFormatPreference={setFormatPreference}
+              onClearLocalVault={handleClearLocalVault}
+            />
+          )}
         </main>
 
         {/* Global Modals */}
@@ -459,6 +511,7 @@ export default function App() {
           user={user}
           onSignOut={() => signOutUser().then(() => setUser(null))}
           onClearLocalVault={handleClearLocalVault}
+          onNavigateToFullSettings={() => setActiveTab('settings')}
         />
 
         {inspectingPhoto && (

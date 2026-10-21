@@ -24,6 +24,7 @@ interface SettingsModalProps {
   user: UserProfile | null;
   onSignOut: () => void;
   onClearLocalVault: () => void;
+  onNavigateToFullSettings?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -36,6 +37,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   user,
   onSignOut,
   onClearLocalVault,
+  onNavigateToFullSettings,
 }) => {
   if (!isOpen) return null;
 
@@ -106,12 +108,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </p>
             <div className="grid grid-cols-3 gap-1.5">
               {[
+                { id: '3hours', label: '3h (Min)' },
+                { id: '6hours', label: '6h' },
+                { id: '12hours', label: '12h' },
+                { id: '24hours', label: '24h (1 Day)' },
+                { id: '48hours', label: '48h (2 Days)' },
                 { id: 'none', label: 'Local Only' },
-                { id: '1day', label: '1 Day' },
-                { id: '2days', label: '2 Days' },
-                { id: '3days', label: '3 Days' },
-                { id: '4days', label: '4 Days' },
-                { id: '7days', label: '7 Days' },
               ].map((ret) => (
                 <button
                   key={ret.id}
@@ -126,6 +128,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               ))}
             </div>
+
+            {onNavigateToFullSettings && (
+              <button
+                type="button"
+                onClick={() => {
+                  onNavigateToFullSettings();
+                  onClose();
+                }}
+                className="w-full mt-3 py-2 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-blue-100 transition cursor-pointer"
+              >
+                <span>Open Full Account &amp; Settings Page ›</span>
+              </button>
+            )}
           </div>
 
           <div className="h-px bg-slate-100 dark:bg-slate-800"></div>

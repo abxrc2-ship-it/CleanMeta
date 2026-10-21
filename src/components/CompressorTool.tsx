@@ -364,10 +364,10 @@ export const CompressorTool: React.FC<CompressorToolProps> = ({
                 <Cloud className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                 <div>
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Storage Option (অনলাইন / অফলাইন)
+                    Storage Option (Online / Offline)
                   </span>
                   <p className="text-[11px] text-slate-500">
-                    Local Only operates 100% offline; Cloud keeps file 1 to 4 days
+                    Local Only operates 100% offline; Cloud keeps file temporarily
                   </p>
                 </div>
               </div>
@@ -383,13 +383,13 @@ export const CompressorTool: React.FC<CompressorToolProps> = ({
                 }}
                 className="py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer"
               >
-                <option value="none">Local Only (অফলাইন - কোনো ক্লাউড নয়)</option>
-                <option value="1day">Cloud: 1 Day (১ দিন)</option>
-                <option value="2days">Cloud: 2 Days (২ দিন)</option>
-                <option value="3days">Cloud: 3 Days (৩ দিন)</option>
-                <option value="4days">Cloud: 4 Days (৪ দিন)</option>
-                <option value="7days">Cloud: 7 Days (৭ দিন)</option>
-                <option value="permanent">Cloud: Permanent (সর্বোচ্চ আনলিমিটেড)</option>
+                <option value="none">Local Only (100% Offline RAM)</option>
+                <option value="1day">Cloud: 1 Day</option>
+                <option value="2days">Cloud: 2 Days</option>
+                <option value="3days">Cloud: 3 Days</option>
+                <option value="4days">Cloud: 4 Days</option>
+                <option value="7days">Cloud: 7 Days</option>
+                <option value="permanent">Cloud: Permanent</option>
               </select>
             </div>
 

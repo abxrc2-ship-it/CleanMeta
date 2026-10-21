@@ -27,10 +27,16 @@ import {
   Bot,
   Image as ImageIcon,
   ExternalLink,
+  Clock,
+  HardDrive,
+  Cloud,
+  ArrowRight,
 } from 'lucide-react';
-import { PhotoItem, CleanFormatPreference, RetentionPreference } from '../types';
+import { PhotoItem, CleanFormatPreference, RetentionPreference, UserProfile } from '../types';
 import { formatBytes, processAndCleanImage } from '../lib/imageProcessor';
 import { getCleanMetaFilename } from '../lib/naming';
+import { saveFileToCloudVault } from '../lib/cloudVaultManager';
+import { getRemainingOperations, incrementDailyUsage } from '../lib/dailyLimits';
 
 interface ImageMetadataRemoverWorkspaceProps {
   photos: PhotoItem[];
@@ -42,6 +48,10 @@ interface ImageMetadataRemoverWorkspaceProps {
   onChangeFormatPreference: (format: CleanFormatPreference) => void;
   retentionPreference: RetentionPreference;
   onChangeRetentionPreference: (retention: RetentionPreference) => void;
+  user?: UserProfile | null;
+  onNavigate?: (tab: any) => void;
+  storageMode?: 'local' | 'cloud';
+  onToggleStorageMode?: () => void;
 }
 
 export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspaceProps> = ({
@@ -54,6 +64,10 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
   onChangeFormatPreference,
   retentionPreference,
   onChangeRetentionPreference,
+  user,
+  onNavigate,
+  storageMode = 'local',
+  onToggleStorageMode,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
@@ -64,6 +78,7 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const [copiedGps, setCopiedGps] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
+  const [cloudSavedNotice, setCloudSavedNotice] = useState<string | null>(null);
 
   // Inspector checkboxes
   const [stripGps, setStripGps] = useState(true);
@@ -182,6 +197,16 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
   // Clean the active photo
   const handleProcessActive = async () => {
     if (!activePhoto) return;
+
+    // Daily limit check
+    const limits = getRemainingOperations(storageMode);
+    if (limits.isExceeded) {
+      alert(
+        `Daily operation limit reached (${limits.limit} photos). Redeem a Pro voucher to unlock higher quota or try again tomorrow.`
+      );
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
@@ -194,6 +219,21 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
         activePhoto.cleanedSize = result.blob.size;
         activePhoto.status = 'cleaned';
         activePhoto.cleanedUrl = URL.createObjectURL(result.blob);
+
+        // Strict No-Save check: if user chose 'none' (or is local), NEVER save to cloud
+        if (retentionPreference !== 'none' && storageMode === 'cloud') {
+          await saveFileToCloudVault(
+            result.blob,
+            activePhoto.name,
+            retentionPreference,
+            'Image Privacy Scrubber',
+            user?.uid
+          );
+          setCloudSavedNotice(`Saved to Vault with ${retentionPreference} auto-clean retention`);
+          setTimeout(() => setCloudSavedNotice(null), 4000);
+        }
+
+        incrementDailyUsage(storageMode, 1);
       } else {
         // Fallback for demo sample photo
         activePhoto.status = 'cleaned';
@@ -210,6 +250,15 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
   // Bulk Clean All Photos
   const handleProcessAllBulk = async () => {
     if (currentPhotos.length === 0) return;
+
+    const limits = getRemainingOperations(storageMode);
+    if (limits.isExceeded) {
+      alert(
+        `Daily operation limit reached (${limits.limit} photos). Redeem a Pro voucher to unlock higher quota or try again tomorrow.`
+      );
+      return;
+    }
+
     setIsBulkProcessing(true);
     setBulkProgress({ current: 0, total: currentPhotos.length });
 
@@ -224,6 +273,16 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
           p.cleanedSize = result.blob.size;
           p.status = 'cleaned';
           p.cleanedUrl = URL.createObjectURL(result.blob);
+
+          if (retentionPreference !== 'none' && storageMode === 'cloud') {
+            await saveFileToCloudVault(
+              result.blob,
+              p.name,
+              retentionPreference,
+              'Bulk Image Scrubber',
+              user?.uid
+            );
+          }
         } else {
           p.status = 'cleaned';
           p.cleanedUrl = p.originalUrl;
@@ -235,6 +294,14 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
     }
 
     setIsBulkProcessing(false);
+    incrementDailyUsage(storageMode, currentPhotos.length);
+
+    if (retentionPreference !== 'none' && storageMode === 'cloud') {
+      setCloudSavedNotice(
+        `Saved all ${currentPhotos.length} files to Cloud Vault with ${retentionPreference} auto-clean timers.`
+      );
+      setTimeout(() => setCloudSavedNotice(null), 4000);
+    }
     if (activePhoto?.status === 'cleaned') {
       setActiveTab('cleaned');
     }
@@ -244,9 +311,7 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
     if (!activePhoto) return;
     const blobToDownload = activePhoto.cleanedBlob || new Blob(['clean'], { type: 'image/jpeg' });
     const ext = formatPreference === 'auto' ? 'jpg' : formatPreference;
-    const filename = autoRenameHash
-      ? `cm_${activePhoto.id.slice(0, 8)}_clean.${ext}`
-      : getCleanMetaFilename(activePhoto.name || 'photo.jpg', ext);
+    const filename = getCleanMetaFilename(activePhoto.name || 'photo.jpg', ext);
 
     const url = URL.createObjectURL(blobToDownload);
     const a = document.createElement('a');
@@ -289,17 +354,38 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
           <span className="font-semibold text-blue-600 dark:text-cyan-400">Image Tools</span>
           <span>›</span>
           <span className="text-slate-900 dark:text-white font-medium">
-            Metadata Remover &amp; EXIF Scrubber
+            Metadata Remover &amp; Privacy Scrubber
           </span>
         </div>
 
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-50 dark:bg-neutral-900 border border-cyan-200 dark:border-neutral-800 text-cyan-800 dark:text-cyan-300 font-semibold text-[11px]">
+        <button
+          type="button"
+          onClick={onToggleStorageMode}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-semibold transition cursor-pointer hover:scale-105 ${
+            storageMode === 'local'
+              ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+              : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+          }`}
+          title="Click to toggle Local Sandbox vs Web Server 1 GB"
+        >
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+            <span
+              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                storageMode === 'local' ? 'bg-emerald-400' : 'bg-rose-400'
+              }`}
+            ></span>
+            <span
+              className={`relative inline-flex rounded-full h-2 w-2 ${
+                storageMode === 'local' ? 'bg-emerald-500' : 'bg-rose-500'
+              }`}
+            ></span>
           </span>
-          <span>Active: Local WebAssembly Engine — 0KB uploaded to any server</span>
-        </div>
+          <span>
+            {storageMode === 'local'
+              ? 'Local Sandbox (Green) • 100% In-Browser RAM'
+              : 'Web Server (Red) • Vercel 1 GB Cloud Vault (3h–2d Auto-Purge)'}
+          </span>
+        </button>
       </div>
 
       {/* Header Row with Stat Counters */}
@@ -322,11 +408,11 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
           </p>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Action Controls (Responsive: Full width buttons on phone) */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/25 flex items-center gap-2 transition cursor-pointer"
+            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/25 flex items-center justify-center gap-2 transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Upload Photos (Bulk)</span>
@@ -336,7 +422,7 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
             <button
               onClick={handleProcessAllBulk}
               disabled={isBulkProcessing}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/25 flex items-center gap-2 transition cursor-pointer disabled:opacity-50"
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/25 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
             >
               <ShieldCheck className="w-4 h-4" />
               <span>
@@ -350,7 +436,7 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
           {currentPhotos.length > 0 && (
             <button
               onClick={handleCleanAll}
-              className="px-3.5 py-2 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+              className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
               title="Purge all uploaded images and reset workspace"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -360,13 +446,32 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
         </div>
       </div>
 
+      {/* Cloud Saved Notification */}
+      {cloudSavedNotice && (
+        <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs flex items-center justify-between gap-2 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-semibold">{cloudSavedNotice}</span>
+          </div>
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate('my-files')}
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
+              <span>View Vault</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ============================================================== */}
       {/* ZERO IMAGES LOADED: Clean, Click-Anywhere Dropzone */}
       {/* ============================================================== */}
       {currentPhotos.length === 0 ? (
         <div
           onClick={() => fileInputRef.current?.click()}
-          className="p-12 sm:p-20 rounded-3xl border-2 border-dashed border-slate-300 dark:border-neutral-800 hover:border-blue-500 dark:hover:border-blue-500 bg-white dark:bg-[#0a0a0a] text-center cursor-pointer flex flex-col items-center justify-center gap-4 transition shadow-xs hover:shadow-lg"
+          className="p-8 sm:p-20 rounded-3xl border-2 border-dashed border-slate-300 dark:border-neutral-800 hover:border-blue-500 dark:hover:border-blue-500 bg-white dark:bg-[#0a0a0a] text-center cursor-pointer flex flex-col items-center justify-center gap-4 transition shadow-xs hover:shadow-lg"
         >
           <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-neutral-900 text-blue-600 dark:text-cyan-400 flex items-center justify-center shadow-inner">
             <UploadCloud className="w-8 h-8" />
@@ -547,17 +652,6 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add More</span>
                 </button>
-
-                {currentPhotos.length > 1 && (
-                  <button
-                    onClick={handleProcessAllBulk}
-                    disabled={isBulkProcessing}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Scrub All (Bulk)</span>
-                  </button>
-                )}
 
                 <button
                   onClick={handleCleanAll}
@@ -741,8 +835,8 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
                         </div>
                       )}
 
-                      {/* Bottom Image Metadata Pill (GENUINE METADATA ONLY - NO FAKE FALLBACKS!) */}
-                      <div className="absolute bottom-3 left-3 right-3 p-3 rounded-xl bg-slate-900/90 backdrop-blur-md text-white text-xs flex flex-wrap items-center justify-between gap-2 border border-slate-700/60">
+                      {/* Desktop Bottom Metadata Pill (Hidden on phone screens to prevent image obstruction!) */}
+                      <div className="hidden sm:flex absolute bottom-3 left-3 right-3 p-3 rounded-xl bg-slate-900/90 backdrop-blur-md text-white text-xs items-center justify-between gap-2 border border-slate-700/60">
                         <div>
                           <p className="text-[10px] text-slate-400 uppercase font-mono">Original File</p>
                           <p className="font-bold text-xs truncate max-w-[170px]">
@@ -793,12 +887,42 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
                   )}
                 </div>
 
-                {/* Primary Action Button Suite */}
-                <div className="flex flex-col sm:flex-row items-center gap-3 pt-1">
+                {/* Mobile Metadata Pill (Rendered cleanly beneath canvas so phone users can view entire photo!) */}
+                {activePhoto && (
+                  <div className="sm:hidden p-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-mono">File</p>
+                      <p className="font-bold text-xs truncate">{activePhoto.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-mono">Dimensions</p>
+                      <p className="font-bold text-xs">
+                        {activePhoto.dimensions?.width && activePhoto.dimensions?.height
+                          ? `${activePhoto.dimensions.width} × ${activePhoto.dimensions.height}`
+                          : 'Auto'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-mono">{isAi ? 'AI Engine' : 'Hardware'}</p>
+                      <p className="font-bold text-xs truncate">
+                        {cameraName || (isAi ? meta?.aiToolOrSoftware || 'AI' : 'None')}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-mono">Location</p>
+                      <p className="font-bold text-xs truncate">
+                        {hasGps ? `${meta?.gpsLatitude?.toFixed(2)}°, ${meta?.gpsLongitude?.toFixed(2)}°` : 'No GPS (Safe)'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Primary Action Button Suite (Responsive: Stacks on mobile) */}
+                <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-1">
                   <button
                     onClick={handleProcessActive}
                     disabled={isProcessing}
-                    className="flex-1 w-full py-3 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-extrabold text-sm shadow-md shadow-blue-600/30 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full sm:flex-1 py-3 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-extrabold text-sm shadow-md shadow-blue-600/30 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <ShieldCheck className="w-5 h-5" />
                     <span>{isProcessing ? 'Scrubbing Metadata...' : 'Scrub & Clean This Photo'}</span>
@@ -827,8 +951,74 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
               </div>
             </div>
 
-            {/* RIGHT COLUMN: Metadata Tag Inspector (5 Cols) */}
+            {/* RIGHT COLUMN: Metadata Tag Inspector & Retention Controls (5 Cols) */}
             <div className="lg:col-span-5 flex flex-col gap-4">
+              {/* CLOUD RETENTION POLICY SELECTOR (Min 3h to Max 2 Days per user request) */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-neutral-800 shadow-xs flex flex-col gap-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-neutral-800">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-blue-600 dark:text-cyan-400" />
+                    <span className="font-extrabold text-xs uppercase tracking-wider text-slate-900 dark:text-white">
+                      Cloud Vault &amp; Auto-Purge
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-cyan-300 text-[10px] font-mono font-bold">
+                    Vercel 1 GB
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-500 dark:text-neutral-400">
+                  How long should CleanMeta hold your processed file before automated self-destruction?
+                </p>
+
+                {/* Retention Buttons Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs">
+                  {[
+                    { id: 'none', label: '0h (Incognito)', hint: 'Wipe on close' },
+                    { id: '3hours', label: '3 Hours (Min)', hint: 'Quick Cache' },
+                    { id: '6hours', label: '6 Hours', hint: 'Half day' },
+                    { id: '12hours', label: '12 Hours', hint: 'Work day' },
+                    { id: '24hours', label: '24 Hours', hint: '1 Day' },
+                    { id: '48hours', label: '2 Days (Max)', hint: 'Pro Vault' },
+                  ].map((opt) => {
+                    const isSelected = retentionPreference === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => onChangeRetentionPreference(opt.id as RetentionPreference)}
+                        className={`p-2 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                          isSelected
+                            ? 'bg-blue-50 dark:bg-blue-950/70 border-blue-600 text-blue-700 dark:text-blue-300 font-bold ring-1 ring-blue-500/50'
+                            : 'bg-slate-50 dark:bg-neutral-900 border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="font-bold text-[11px] block">{opt.label}</span>
+                        <span className="text-[9px] text-slate-400 font-normal">{opt.hint}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 dark:border-neutral-800">
+                  <span className="text-slate-500 dark:text-neutral-400">
+                    {retentionPreference === 'none'
+                      ? 'Incognito: 0 bytes retained on servers'
+                      : `Auto-purge timer: Cleans in ${retentionPreference.replace('hours', ' hours').replace('48hours', '2 days')}`}
+                  </span>
+                  {onNavigate && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigate('my-files')}
+                      className="text-blue-600 dark:text-cyan-400 font-bold hover:underline"
+                    >
+                      Open Vault →
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Sanitization Checklist */}
               <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-neutral-800 shadow-xs flex flex-col gap-4">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-neutral-800">
                   <div className="flex items-center gap-2">
@@ -842,7 +1032,6 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
                   </span>
                 </div>
 
-                {/* Sanitization Checklist */}
                 <div className="space-y-2 text-xs">
                   <label className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-neutral-900 border border-slate-200/80 dark:border-neutral-800 cursor-pointer">
                     <span className="font-semibold text-slate-800 dark:text-slate-200">
@@ -907,7 +1096,7 @@ export const ImageMetadataRemoverWorkspace: React.FC<ImageMetadataRemoverWorkspa
                   </div>
 
                   {tagsCount > 0 ? (
-                    <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                    <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
                       {meta?.tagList?.map((tag, idx) => (
                         <div
                           key={idx}

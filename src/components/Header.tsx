@@ -25,6 +25,8 @@ interface HeaderProps {
   onOpenAuth: () => void;
   onOpenSidebar?: () => void;
   favoritesCount?: number;
+  storageMode?: 'local' | 'cloud';
+  onToggleStorageMode?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -37,8 +39,11 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuth,
   onOpenSidebar,
   favoritesCount = 0,
+  storageMode = 'local',
+  onToggleStorageMode,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -113,16 +118,39 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
 
-          {/* Desktop Left Context (No duplicate logo!) */}
-          <div className="hidden lg:flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 pl-1">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span className="font-mono text-[11px] uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold">
-              Local Sandbox Active
-            </span>
-          </div>
+          {/* Interactive Server / Local Mode Indicator (Sleek Green / Red Dot) */}
+          {onToggleStorageMode && (
+            <button
+              type="button"
+              onClick={onToggleStorageMode}
+              title={
+                storageMode === 'local'
+                  ? 'Local Sandbox (Green) • In-Browser RAM. Click to switch to Web Server.'
+                  : 'Web Server (Red) • Cloud Server 1 GB. Click to switch to Local Sandbox.'
+              }
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer border hover:scale-105 ${
+                storageMode === 'local'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+              }`}
+            >
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    storageMode === 'local' ? 'bg-emerald-400' : 'bg-rose-400'
+                  }`}
+                ></span>
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                    storageMode === 'local' ? 'bg-emerald-500' : 'bg-rose-500'
+                  }`}
+                ></span>
+              </span>
+              <span className="font-semibold text-[11px]">
+                {storageMode === 'local' ? 'Local' : 'Web Server'}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Center: Main Nav Links (Matches screenshots: Home, All Tools, Pricing, Help, About) */}
@@ -253,18 +281,65 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Right Side: Security Pill, Theme Toggle, Avatar */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* 100% Private - In Browser Processing Pill (Matches screenshots!) */}
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-50 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-800 text-cyan-800 dark:text-cyan-300 text-xs font-semibold shadow-2xs">
-            <ShieldCheck className="w-4 h-4 text-cyan-600" />
-            <span>100% Private – In Browser Processing</span>
-          </div>
+        {/* Right Side: Search Icon on Mobile, Theme Toggle, Avatar */}
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Mobile Search Toggle Button */}
+          <button
+            onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+            className="sm:hidden w-8 h-8 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            aria-label="Toggle search"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+
+          {/* Mobile compact storage status button */}
+          {onToggleStorageMode && (
+            <button
+              type="button"
+              onClick={onToggleStorageMode}
+              className={`sm:hidden flex items-center justify-center w-8 h-8 rounded-xl border transition cursor-pointer ${
+                storageMode === 'local'
+                  ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600'
+                  : 'border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/50 text-rose-600'
+              }`}
+              title={storageMode === 'local' ? 'Local Sandbox - Click to switch' : 'Web Server - Click to switch'}
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    storageMode === 'local' ? 'bg-emerald-400' : 'bg-rose-400'
+                  }`}
+                ></span>
+                <span
+                  className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                    storageMode === 'local' ? 'bg-emerald-500' : 'bg-rose-500'
+                  }`}
+                ></span>
+              </span>
+            </button>
+          )}
+
+          {/* Desktop Right Mode Badge */}
+          {onToggleStorageMode && (
+            <button
+              type="button"
+              onClick={onToggleStorageMode}
+              className={`hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold shadow-2xs hover:scale-105 transition cursor-pointer ${
+                storageMode === 'local'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+              }`}
+              title="Click to toggle Local Sandbox vs Web Server"
+            >
+              <ShieldCheck className={`w-4 h-4 ${storageMode === 'local' ? 'text-emerald-600' : 'text-rose-600'}`} />
+              <span>{storageMode === 'local' ? '100% Private (Local RAM)' : 'Web Server Vault'}</span>
+            </button>
+          )}
 
           {/* Theme toggle */}
           <button
             onClick={onToggleDarkMode}
-            className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            className="w-8 sm:w-9 h-8 sm:h-9 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
             title={darkMode ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
           >
             {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
@@ -276,9 +351,17 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={onOpenSettings}
               className="flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1 rounded-full border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
             >
-              <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
-                {user.displayName?.[0] || 'U'}
-              </div>
+              {user.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'Profile'}
+                  className="w-7 h-7 rounded-full object-cover border border-blue-500"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                  {user.displayName?.[0] || 'U'}
+                </div>
+              )}
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200 hidden sm:inline max-w-[90px] truncate">
                 {user.displayName?.split(' ')[0] || 'Account'}
               </span>
@@ -294,6 +377,58 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
       </div>
+
+      {/* Expandable Mobile Search Drawer */}
+      {isMobileSearchOpen && (
+        <div className="sm:hidden px-4 pb-3 pt-1 border-t border-slate-100 dark:border-neutral-800 bg-white dark:bg-black animate-in slide-in-from-top-2">
+          <div className="relative flex items-center">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
+            <input
+              type="text"
+              autoFocus
+              placeholder="Search all 23 tools..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-9 py-2 rounded-xl bg-slate-100 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 text-slate-400 hover:text-slate-600 text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {searchQuery.trim() && (
+            <div className="mt-2 p-1.5 rounded-xl bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 max-h-60 overflow-y-auto space-y-1">
+              {filteredTools.length > 0 ? (
+                filteredTools.map((tool) => (
+                  <div
+                    key={tool.id}
+                    onClick={() => {
+                      handleSelectTool(tool.id);
+                      setIsMobileSearchOpen(false);
+                    }}
+                    className="p-2.5 rounded-lg hover:bg-white dark:hover:bg-neutral-800 transition flex items-center justify-between cursor-pointer"
+                  >
+                    <div>
+                      <p className="font-bold text-xs text-slate-900 dark:text-white">
+                        {tool.title}
+                      </p>
+                      <p className="text-[10px] text-slate-400 line-clamp-1">{tool.description}</p>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-blue-500" />
+                  </div>
+                ))
+              ) : (
+                <p className="p-3 text-center text-xs text-slate-400">No matching tools</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </header>
   );
 };

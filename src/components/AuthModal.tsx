@@ -116,10 +116,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
             <div>
               <h2 id="auth-modal-title" className="text-base font-bold text-slate-900 dark:text-white">
-                CleanMeta অ্যাকাউন্ট
+                CleanMeta Account
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                ইমেইল এবং পাসওয়ার্ড অথবা Google দিয়ে প্রবেশ করুন
+                Sign in with your email or Google account
               </p>
             </div>
           </div>
@@ -147,7 +147,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             }`}
           >
             <LogIn className="w-4 h-4" />
-            লগইন (Sign In)
+            Sign In
           </button>
           <button
             type="button"
@@ -162,7 +162,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             }`}
           >
             <UserPlus className="w-4 h-4" />
-            নতুন অ্যাকাউন্ট (Register)
+            Create Account
           </button>
         </div>
 
@@ -188,7 +188,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {mode === 'signup' && (
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  আপনার নাম (Name)
+                  Full Name
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
@@ -196,7 +196,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="যেমন: রহিম আহমেদ"
+                    placeholder="e.g. John Doe"
                     className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -205,7 +205,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                ইমেইল এড্রেস (Email)
+                Email Address
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
@@ -222,7 +222,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                পাসওয়ার্ড (Password)
+                Password
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
@@ -231,7 +231,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="অন্তত ৬ অক্ষরের পাসওয়ার্ড"
+                  placeholder="At least 6 characters"
                   className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -245,17 +245,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>প্রসেসিং হচ্ছে...</span>
+                  <span>Processing...</span>
                 </>
               ) : mode === 'login' ? (
                 <>
                   <LogIn className="w-4 h-4" />
-                  <span>লগইন করুন</span>
+                  <span>Sign In</span>
                 </>
               ) : (
                 <>
                   <UserPlus className="w-4 h-4" />
-                  <span>অ্যাকাউন্ট তৈরি করুন</span>
+                  <span>Create Account</span>
                 </>
               )}
             </button>
@@ -268,7 +268,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-white dark:bg-slate-900 px-3 text-slate-400 font-medium">
-                অথবা
+                Or continue with
               </span>
             </div>
           </div>
@@ -302,12 +302,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 />
               </svg>
             )}
-            <span>Google দিয়ে সাইন ইন করুন</span>
+            <span>Sign In with Google</span>
           </button>
 
           {/* Privacy Note */}
           <div className="pt-2 text-[11px] text-slate-500 dark:text-slate-400 text-center leading-relaxed">
-            🔒 CleanMeta সম্পূর্ণ নিরাপদ: লগইন শুধুমাত্র আপনার সেশন বজায় রাখার জন্য, আপনার কোনো ছবি কখনো কোনো সার্ভারে আপলোড বা সেভ করা হয় না।
+            🔒 CleanMeta Privacy Guarantee: Account authentication is used strictly to sync preferences and cloud storage. Photos remain private to you.
           </div>
         </div>
       </div>

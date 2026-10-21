@@ -101,15 +101,15 @@ app.post('/api/blob/upload', upload.single('file'), async (req, res): Promise<vo
     return;
   }
 
-  // 4. Calculate expiration (Min 1 day, up to 7 days or permanent)
-  const retention = req.body.retention || '1day';
-  let durationMs = 1 * 24 * 60 * 60 * 1000;
-  if (retention === '2days') durationMs = 2 * 24 * 60 * 60 * 1000;
-  else if (retention === '3days') durationMs = 3 * 24 * 60 * 60 * 1000;
-  else if (retention === '4days') durationMs = 4 * 24 * 60 * 60 * 1000;
-  else if (retention === '7days') durationMs = 7 * 24 * 60 * 60 * 1000;
-  else if (retention === 'permanent') durationMs = 365 * 24 * 60 * 60 * 1000; // 1 year / permanent
-  const expiresAt = retention === 'permanent' ? undefined : Date.now() + durationMs;
+  // 4. Calculate expiration (Min 3 hours, up to 2 days maximum)
+  const retention = req.body.retention || '24hours';
+  let durationMs = 24 * 60 * 60 * 1000;
+  if (retention === '3hours') durationMs = 3 * 60 * 60 * 1000;
+  else if (retention === '6hours') durationMs = 6 * 60 * 60 * 1000;
+  else if (retention === '12hours') durationMs = 12 * 60 * 60 * 1000;
+  else if (retention === '24hours' || retention === '1day') durationMs = 24 * 60 * 60 * 1000;
+  else if (retention === '48hours' || retention === '2days') durationMs = 48 * 60 * 60 * 1000;
+  const expiresAt = Date.now() + durationMs;
 
   // 5. Build safe scoped path: users/{uid}/{randomUuid}.ext
   let ext = 'jpg';

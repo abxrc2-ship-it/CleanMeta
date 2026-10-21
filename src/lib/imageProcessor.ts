@@ -224,7 +224,12 @@ export function formatBytes(bytes: number, decimals = 1): string {
 export function getSafeCleanFilename(originalName: string, mimeType: string, index?: number): string {
   const d = new Date();
   const pad2 = (n: number) => String(n).padStart(2, '0');
-  const dateStr = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const day = pad2(d.getDate());
+  const month = pad2(d.getMonth() + 1);
+  const year = d.getFullYear();
+  const hour = pad2(d.getHours());
+  const minute = pad2(d.getMinutes());
+  const uniqueCode = Math.random().toString(36).substring(2, 6).toUpperCase();
 
   let ext = 'jpg';
   if (mimeType === 'image/png') ext = 'png';
@@ -238,11 +243,6 @@ export function getSafeCleanFilename(originalName: string, mimeType: string, ind
     }
   }
 
-  if (index !== undefined) {
-    const serial = String(index + 1).padStart(3, '0');
-    return `cleanmeta-${dateStr}-${serial}.${ext}`;
-  }
-
-  const timeStr = `${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
-  return `cleanmeta-${dateStr}-${timeStr}.${ext}`;
+  const serial = index !== undefined ? String(index + 1).padStart(3, '0') : '001';
+  return `CleanMeta_${day}-${month}-${year}_${hour}-${minute}_${serial}-${uniqueCode}.${ext}`;
 }

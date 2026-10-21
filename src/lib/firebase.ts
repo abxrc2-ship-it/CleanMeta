@@ -7,6 +7,10 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
+  updateEmail,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
   signOut as fbSignOut,
   onAuthStateChanged,
   User,
@@ -200,3 +204,79 @@ function formatUserProfile(user: User): UserProfile {
     photoURL: user.photoURL,
   };
 }
+
+/**
+ * Updates the user's display name or photo URL
+ */
+export async function updateUserProfileInfo(displayName: string, photoURL?: string): Promise<UserProfile> {
+  if (!auth || !auth.currentUser) {
+    throw new Error('কোনো সক্রিয় অ্যাকাউন্ট পাওয়া যায়নি। অনুগ্রহ করে লগইন করুন।');
+  }
+
+  await updateProfile(auth.currentUser, {
+    displayName: displayName.trim(),
+    ...(photoURL ? { photoURL: photoURL.trim() } : {}),
+  });
+
+  return formatUserProfile(auth.currentUser);
+}
+
+/**
+ * Updates the user's email address, with re-authentication support if required
+ */
+export async function updateUserEmail(newEmail: string, currentPassword?: string): Promise<UserProfile> {
+  if (!auth || !auth.currentUser) {
+    throw new Error('কোনো সক্রিয় অ্যাকাউন্ট পাওয়া যায়নি।');
+  }
+
+  const currentUser = auth.currentUser;
+
+  try {
+    if (currentPassword && currentUser.email) {
+      const cred = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      await reauthenticateWithCredential(currentUser, cred);
+    }
+    await updateEmail(currentUser, newEmail.trim());
+    return formatUserProfile(currentUser);
+  } catch (error: any) {
+    if (error.code === 'auth/requires-recent-login' && !currentPassword) {
+      throw new Error('নিরাপত্তার স্বার্থে ইমেইল পরিবর্তন করতে আপনার বর্তমান পাসওয়ার্ড প্রদান করুন।');
+    }
+    throw new Error(getAuthErrorMessage(error.code || error.message));
+  }
+}
+
+/**
+ * Updates the user's password, with re-authentication support if required
+ */
+export async function updateUserPassword(newPassword: string, currentPassword?: string): Promise<void> {
+  if (!auth || !auth.currentUser) {
+    throw new Error('কোনো সক্রিয় অ্যাকাউন্ট পাওয়া যায়নি।');
+  }
+
+  const currentUser = auth.currentUser;
+
+  try {
+    if (currentPassword && currentUser.email) {
+      const cred = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      await reauthenticateWithCredential(currentUser, cred);
+    }
+    await updatePassword(currentUser, newPassword);
+  } catch (error: any) {
+    if (error.code === 'auth/requires-recent-login' && !currentPassword) {
+      throw new Error('নিরাপত্তার স্বার্থে পাসওয়ার্ড পরিবর্তন করতে আপনার বর্তমান পাসওয়ার্ড প্রদান করুন।');
+    }
+    throw new Error(getAuthErrorMessage(error.code || error.message));
+  }
+}
+
+/**
+ * Returns current auth provider ID (e.g. 'google.com', 'password')
+ */
+export function getUserAuthProvider(): string {
+  if (!auth || !auth.currentUser || !auth.currentUser.providerData.length) {
+    return 'local';
+  }
+  return auth.currentUser.providerData[0].providerId;
+}
+

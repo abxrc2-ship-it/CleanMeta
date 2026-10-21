@@ -563,13 +563,13 @@ export const ConverterTool: React.FC<ConverterToolProps> = ({ user, onOpenAuth, 
                     onChange={(e) => setRetention(e.target.value as any)}
                     className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="none">Local Only (অফলাইন - কোনো ক্লাউড নয়)</option>
-                    <option value="1day">Cloud: 1 Day (১ দিন)</option>
-                    <option value="2days">Cloud: 2 Days (২ দিন)</option>
-                    <option value="3days">Cloud: 3 Days (৩ দিন)</option>
-                    <option value="4days">Cloud: 4 Days (৪ দিন)</option>
-                    <option value="7days">Cloud: 7 Days (৭ দিন)</option>
-                    <option value="permanent">Cloud: Permanent (সর্বোচ্চ আনলিমিটেড)</option>
+                    <option value="none">Local Only (100% Offline RAM)</option>
+                    <option value="1day">Cloud: 1 Day</option>
+                    <option value="2days">Cloud: 2 Days</option>
+                    <option value="3days">Cloud: 3 Days</option>
+                    <option value="4days">Cloud: 4 Days</option>
+                    <option value="7days">Cloud: 7 Days</option>
+                    <option value="permanent">Cloud: Permanent</option>
                   </select>
                 </div>
               </div>

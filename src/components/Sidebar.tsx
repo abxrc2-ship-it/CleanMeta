@@ -22,6 +22,8 @@ interface SidebarProps {
   favoritesCount?: number;
   isOpen?: boolean;
   onClose?: () => void;
+  storageMode?: 'local' | 'cloud';
+  onToggleStorageMode?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -30,6 +32,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   favoritesCount = 0,
   isOpen = false,
   onClose,
+  storageMode = 'local',
+  onToggleStorageMode,
 }) => {
   const isImageTab =
     activeTab === 'image-tools' ||
@@ -81,7 +85,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           badge: favoritesCount > 0 ? String(favoritesCount) : undefined,
           active: activeTab === 'favorites',
         },
-        { id: 'settings', label: 'Account / Settings', icon: Settings, active: activeTab === 'settings' },
+        {
+          id: 'settings',
+          label: 'Account / Settings',
+          icon: Settings,
+          badge: storageMode === 'local' ? 'Local' : '1 GB Cloud',
+          active: activeTab === 'settings' || (activeTab as string) === 'account',
+        },
+        {
+          id: 'admin',
+          label: 'Admin Portal',
+          icon: Lock,
+          badge: 'Owner',
+          active: activeTab === 'admin',
+        },
       ],
     },
   ];
@@ -191,15 +208,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Bottom Persistent 100% Client-Side Privacy Card (Matches design screenshot!) */}
-        <div className="p-3 border-t border-slate-100 dark:border-slate-800">
-          <div className="p-3.5 rounded-2xl bg-[#eff6ff] dark:bg-blue-950/30 border border-[#bfdbfe] dark:border-blue-900/60 flex flex-col gap-1 text-left">
-            <div className="flex items-center gap-1.5 text-blue-900 dark:text-blue-300 font-bold text-xs">
-              <Lock className="w-3.5 h-3.5 text-blue-600" />
-              <span>100% Client-Side Privacy</span>
+        {/* Bottom Persistent Interactive Engine Status Card */}
+        <div className="p-3 border-t border-slate-100 dark:border-neutral-800">
+          <div
+            onClick={onToggleStorageMode}
+            className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col gap-1 text-left ${
+              storageMode === 'local'
+                ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 hover:border-emerald-400'
+                : 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/60 hover:border-rose-400'
+            }`}
+            title="Click to toggle between Local Sandbox (Offline) and Web Server (1 GB Cloud Vault)"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <span className="relative flex h-2 w-2">
+                  <span
+                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                      storageMode === 'local' ? 'bg-emerald-400' : 'bg-rose-400'
+                    }`}
+                  ></span>
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${
+                      storageMode === 'local' ? 'bg-emerald-500' : 'bg-rose-500'
+                    }`}
+                  ></span>
+                </span>
+                <span
+                  className={
+                    storageMode === 'local'
+                      ? 'text-emerald-900 dark:text-emerald-300'
+                      : 'text-rose-900 dark:text-rose-300'
+                  }
+                >
+                  {storageMode === 'local' ? 'Local Sandbox' : 'Web Server'}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">Switch ⇄</span>
             </div>
-            <p className="text-[11px] text-blue-700/90 dark:text-blue-400 leading-relaxed">
-              Your files are processed securely in your browser and never leave your device.
+            <p className="text-[11px] text-slate-600 dark:text-neutral-400 leading-relaxed">
+              {storageMode === 'local'
+                ? 'RAM only, 100% private offline.'
+                : '1 GB Cloud Vault & Auto-Purge active.'}
             </p>
           </div>
         </div>

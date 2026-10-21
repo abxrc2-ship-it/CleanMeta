@@ -1,7 +1,8 @@
 /**
  * CleanMeta standardized naming utility
  * Format requested by user:
- * cleanmeta-YYYY-MM-DD-001.ext or cleanmeta-YYYY-MM-DD-HHmmss.ext
+ * CleanMeta_[DD]-[MM]-[YYYY]_[HH]-[mm]_[unique].[ext]
+ * e.g. CleanMeta_21-10-2026_15-45_001.jpg
  */
 
 export function getCleanMetaFilename(
@@ -17,7 +18,16 @@ export function getCleanMetaFilename(
 ): string {
   const d = new Date();
   const pad2 = (n: number) => String(n).padStart(2, '0');
-  const dateStr = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  
+  // User exact specification: Date first (DD), then Month (MM), then Year (YYYY), then Hour-Minute (HH-mm)
+  const day = pad2(d.getDate());
+  const month = pad2(d.getMonth() + 1);
+  const year = d.getFullYear();
+  const hour = pad2(d.getHours());
+  const minute = pad2(d.getMinutes());
+
+  // Guarantee every single image has a distinct number/suffix so no numbers or names are identical
+  const uniqueCode = Math.random().toString(36).substring(2, 6).toUpperCase();
 
   if (typeof optionsOrOriginalName === 'string') {
     let ext = explicitExt || 'jpg';
@@ -26,8 +36,7 @@ export function getCleanMetaFilename(
       ext = optionsOrOriginalName.slice(dotIdx + 1).toLowerCase();
       if (ext === 'jpeg') ext = 'jpg';
     }
-    const timeStr = `${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
-    return `cleanmeta-${dateStr}-${timeStr}.${ext}`;
+    return `CleanMeta_${day}-${month}-${year}_${hour}-${minute}_${uniqueCode}.${ext}`;
   }
 
   const options = optionsOrOriginalName;
@@ -45,16 +54,6 @@ export function getCleanMetaFilename(
     }
   }
 
-  if (options.index !== undefined && !options.useTimestamp) {
-    const serial = String(options.index + 1).padStart(3, '0');
-    return `cleanmeta-${dateStr}-${serial}.${ext}`;
-  }
-
-  const timeStr = `${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
-  if (options.index !== undefined) {
-    const serial = String(options.index + 1).padStart(3, '0');
-    return `cleanmeta-${dateStr}-${timeStr}-${serial}.${ext}`;
-  }
-
-  return `cleanmeta-${dateStr}-${timeStr}.${ext}`;
+  const serialNum = options.index !== undefined ? String(options.index + 1).padStart(3, '0') : '001';
+  return `CleanMeta_${day}-${month}-${year}_${hour}-${minute}_${serialNum}-${uniqueCode}.${ext}`;
 }
