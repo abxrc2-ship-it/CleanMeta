@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Minimize2,
   Download,
@@ -9,7 +9,7 @@ import {
   Image as ImageIcon,
   ArrowRight,
   RefreshCw,
-  Scissors,
+  Maximize,
 } from 'lucide-react';
 import { CompressionOptions, RetentionPreference, ToolType, UserProfile } from '../types';
 import { compressImage, CompressImageResult } from '../lib/compressor';
@@ -70,7 +70,39 @@ export const CompressorTool: React.FC<CompressorToolProps> = ({
       else if (selected.type.includes('webp')) setOutputFormat('image/webp');
       else setOutputFormat('image/jpeg');
     }
+    if (e.target) e.target.value = '';
   };
+
+  // Paste support (Ctrl+V) in CompressorTool
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+        const selected = e.clipboardData.files[0];
+        if (selected.type.startsWith('image/')) {
+          e.preventDefault();
+          setFile(selected);
+          setError(null);
+          setResult(null);
+          if (resultUrl) URL.revokeObjectURL(resultUrl);
+          setResultUrl(null);
+          const url = URL.createObjectURL(selected);
+          setPreviewUrl(url);
+          const img = new Image();
+          img.onload = () => {
+            setDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+          };
+          img.src = url;
+          if (selected.type.includes('png')) setOutputFormat('image/png');
+          else if (selected.type.includes('webp')) setOutputFormat('image/webp');
+          else setOutputFormat('image/jpeg');
+        }
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [resultUrl]);
 
   const handleCompress = async () => {
     if (!file) return;
@@ -452,11 +484,11 @@ export const CompressorTool: React.FC<CompressorToolProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleTransferTo('bg-remover')}
+                        onClick={() => handleTransferTo('image-resizer')}
                         className="flex-1 sm:flex-initial px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition flex items-center justify-center gap-1.5"
                       >
-                        <Scissors className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Cut BG</span>
+                        <Maximize className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Resize</span>
                       </button>
                     </div>
                   )}

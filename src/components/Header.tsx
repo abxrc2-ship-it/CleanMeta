@@ -1,37 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ShieldCheck,
   Sun,
   Moon,
   Menu,
   X,
+  Search,
+  Lock,
   User as UserIcon,
-  LogIn,
-  Shield,
-  HelpCircle,
-  RefreshCw,
-  Minimize2,
-  History,
-  Scissors,
-  Wifi,
-  WifiOff,
-  Cloud,
+  Sliders,
+  Check,
+  ArrowRight,
 } from 'lucide-react';
-import { ToolType, UserProfile } from '../types';
+import { NavigationTab, UserProfile } from '../types';
+import { ALL_TOOLS } from '../lib/toolsRegistry';
 
 interface HeaderProps {
   darkMode: boolean;
   onToggleDarkMode: () => void;
   user: UserProfile | null;
-  activeTab: ToolType | 'history';
-  onTabChange: (tab: ToolType | 'history') => void;
-  onOpenAccount: () => void;
-  onOpenHowItWorks: () => void;
-  onOpenPrivacy: () => void;
+  activeTab: NavigationTab;
+  onTabChange: (tab: NavigationTab) => void;
+  onOpenSettings: () => void;
   onOpenAuth: () => void;
-  isOnline?: boolean;
-  activeMode?: 'local' | 'cloud';
-  onToggleMode?: () => void;
+  onOpenSidebar?: () => void;
+  favoritesCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,320 +33,267 @@ export const Header: React.FC<HeaderProps> = ({
   user,
   activeTab,
   onTabChange,
-  onOpenAccount,
-  onOpenHowItWorks,
-  onOpenPrivacy,
+  onOpenSettings,
   onOpenAuth,
-  isOnline = true,
-  activeMode = 'local',
-  onToggleMode,
+  onOpenSidebar,
+  favoritesCount = 0,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard shortcut Ctrl+K / Cmd+K to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setIsSearchOpen(true);
+      } else if (e.key === 'Escape') {
+        setIsSearchOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Close search when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredTools = searchQuery.trim()
+    ? ALL_TOOLS.filter(
+        (t) =>
+          t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          t.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          t.category.toLowerCase().includes(searchQuery.toLowerCase())
+      ).slice(0, 8)
+    : [];
+
+  const handleSelectTool = (id: string) => {
+    onTabChange(id as NavigationTab);
+    setSearchQuery('');
+    setIsSearchOpen(false);
+  };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md transition-colors">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-        {/* Brand Logo */}
-        <div
-          onClick={() => onTabChange('metadata-remover')}
-          className="flex items-center gap-2.5 cursor-pointer"
-        >
-          <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-lg tracking-tight text-slate-900 dark:text-white">
-                CleanMeta
-              </span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900">
-                Studio
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">
-              Privacy Photo Utilities
-            </p>
-          </div>
-        </div>
-
-        {/* Primary Tool Switcher (Desktop) */}
-        <nav className="hidden lg:flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-bold">
-          <button
-            onClick={() => onTabChange('metadata-remover')}
-            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'metadata-remover'
-                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Metadata Remover</span>
-          </button>
-          <button
-            onClick={() => onTabChange('bg-remover')}
-            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'bg-remover'
-                ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-            }`}
-          >
-            <Scissors className="w-3.5 h-3.5" />
-            <span>BG Remover</span>
-          </button>
-          <button
-            onClick={() => onTabChange('converter')}
-            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'converter'
-                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-            }`}
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Converter</span>
-          </button>
-          <button
-            onClick={() => onTabChange('compressor')}
-            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'compressor'
-                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-            }`}
-          >
-            <Minimize2 className="w-3.5 h-3.5" />
-            <span>Compressor</span>
-          </button>
-          <button
-            onClick={() => onTabChange('history')}
-            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'history'
-                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-            }`}
-          >
-            <History className="w-3.5 h-3.5" />
-            <span>History</span>
-          </button>
-        </nav>
-
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
-          {/* Online / Offline Mode Toggle */}
-          {onToggleMode && (
+    <header className="sticky top-0 z-40 w-full border-b border-slate-200/90 dark:border-neutral-800 bg-white/95 dark:bg-black/95 backdrop-blur-md transition-colors">
+      <div className="w-full px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+        {/* Left Side: Mobile Menu Button + Mobile Brand Logo */}
+        <div className="flex items-center gap-3 shrink-0">
+          {onOpenSidebar && (
             <button
-              onClick={onToggleMode}
-              title={
-                !isOnline
-                  ? 'ইন্টারনেট সংযোগ নেই: লোকাল অফলাইন মোডে নির্বিঘ্নে কাজ চলছে'
-                  : activeMode === 'local'
-                  ? 'বর্তমানে লোকাল অফলাইন মোড সক্রিয় (১০০% প্রাইভেট)। ক্লাউড মোডে যেতে ক্লিক করুন।'
-                  : 'বর্তমানে ক্লাউড স্টোরেজ মোড সক্রিয়। লোকাল অফলাইন মোডে যেতে ক্লিক করুন।'
-              }
-              className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
-                !isOnline
-                  ? 'bg-amber-50 dark:bg-amber-950/70 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400'
-                  : activeMode === 'local'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/70 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'
-                  : 'bg-blue-50 dark:bg-blue-950/70 border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100'
-              }`}
+              onClick={onOpenSidebar}
+              className="lg:hidden w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              aria-label="Open navigation sidebar"
             >
-              {!isOnline ? (
-                <>
-                  <WifiOff className="w-3.5 h-3.5 text-amber-600" />
-                  <span>অফলাইন মোড</span>
-                </>
-              ) : activeMode === 'local' ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <Wifi className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>লোকাল অফলাইন</span>
-                </>
-              ) : (
-                <>
-                  <Cloud className="w-3.5 h-3.5 text-blue-600" />
-                  <span>ক্লাউড সিঙ্ক</span>
-                </>
-              )}
+              <Menu className="w-5 h-5" />
             </button>
           )}
 
-          {/* How It Works & Privacy buttons for desktop */}
-          <button
-            onClick={onOpenHowItWorks}
-            title="How It Works"
-            className="hidden sm:inline-flex p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          {/* Logo is ONLY rendered on screens where Sidebar is hidden (lg:hidden). On desktop, Sidebar already renders the CleanMeta logo on the left! */}
+          <div
+            onClick={() => onTabChange('home')}
+            className="flex lg:hidden items-center gap-2 cursor-pointer select-none"
           >
-            <HelpCircle className="w-4 h-4" />
-          </button>
+            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">
+              CleanMeta
+            </span>
+          </div>
+
+          {/* Desktop Left Context (No duplicate logo!) */}
+          <div className="hidden lg:flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 pl-1">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="font-mono text-[11px] uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold">
+              Local Sandbox Active
+            </span>
+          </div>
+        </div>
+
+        {/* Center: Main Nav Links (Matches screenshots: Home, All Tools, Pricing, Help, About) */}
+        <nav className="hidden xl:flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300">
           <button
-            onClick={onOpenPrivacy}
-            title="Privacy Policy"
-            className="hidden sm:inline-flex p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            onClick={() => onTabChange('home')}
+            className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+              activeTab === 'home'
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-extrabold'
+                : 'hover:text-slate-900 dark:hover:text-white'
+            }`}
           >
-            <Shield className="w-4 h-4" />
+            Home
           </button>
 
-          {/* Theme Toggle */}
           <button
-            onClick={onToggleDarkMode}
-            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            onClick={() => onTabChange('all-tools')}
+            className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+              activeTab === 'all-tools'
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-extrabold'
+                : 'hover:text-slate-900 dark:hover:text-white'
+            }`}
           >
-            {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
+            All Tools
           </button>
 
-          {/* Authentication Button / User Avatar */}
-          {user ? (
-            <button
-              onClick={onOpenAccount}
-              className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 transition text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              title="Account settings"
-            >
-              {user.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName || 'User profile'}
-                  className="w-6 h-6 rounded-full object-cover"
-                />
+          <button
+            onClick={() => onTabChange('pricing')}
+            className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+              activeTab === 'pricing'
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-extrabold'
+                : 'hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            Pricing
+          </button>
+
+          <button
+            onClick={() => onTabChange('help')}
+            className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+              activeTab === 'help'
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-extrabold'
+                : 'hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            Help
+          </button>
+
+          <button
+            onClick={() => onTabChange('about')}
+            className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+              activeTab === 'about'
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-extrabold'
+                : 'hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            About
+          </button>
+        </nav>
+
+        {/* Center-Right: WIDE & COMFORTABLE Global Search with Ctrl+K shortcut */}
+        <div ref={searchContainerRef} className="relative flex-1 max-w-md lg:max-w-lg xl:max-w-xl mx-2 hidden sm:block">
+          <div className="relative flex items-center">
+            <Search className="w-4 h-4 text-slate-400 dark:text-slate-400 absolute left-3.5 pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search tools (e.g. PDF Viewer, EXIF remover, Edit, Merge, Sign...)"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsSearchOpen(true);
+              }}
+              onFocus={() => setIsSearchOpen(true)}
+              className="w-full pl-10 pr-20 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition shadow-inner"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setIsSearchOpen(false);
+                }}
+                className="absolute right-14 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs px-1"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 font-mono text-[10px] text-slate-500 dark:text-slate-400 font-bold shadow-2xs pointer-events-none">
+              Ctrl K
+            </kbd>
+          </div>
+
+          {/* Search Dropdown Results */}
+          {isSearchOpen && searchQuery.trim() && (
+            <div className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl z-50 max-h-96 overflow-y-auto">
+              {filteredTools.length > 0 ? (
+                <div className="space-y-1">
+                  {filteredTools.map((tool) => (
+                    <div
+                      key={tool.id}
+                      onClick={() => handleSelectTool(tool.id)}
+                      className="p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/80 transition cursor-pointer flex items-center justify-between group"
+                    >
+                      <div className="flex-1 pr-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            {tool.title}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono font-semibold uppercase">
+                            {tool.category}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+                          {tool.description}
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition" />
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
-                  {user.displayName ? user.displayName.charAt(0).toUpperCase() : <UserIcon className="w-3.5 h-3.5" />}
+                <div className="p-6 text-center text-xs text-slate-500">
+                  No tools found for "{searchQuery}". Try "PDF", "Metadata", "EXIF", or "Sign".
                 </div>
               )}
-              <span className="max-w-[100px] truncate text-slate-800 dark:text-slate-200 text-xs font-bold">
-                {user.displayName || user.email?.split('@')[0] || 'Account'}
+            </div>
+          )}
+        </div>
+
+        {/* Right Side: Security Pill, Theme Toggle, Avatar */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* 100% Private - In Browser Processing Pill (Matches screenshots!) */}
+          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-50 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-800 text-cyan-800 dark:text-cyan-300 text-xs font-semibold shadow-2xs">
+            <ShieldCheck className="w-4 h-4 text-cyan-600" />
+            <span>100% Private – In Browser Processing</span>
+          </div>
+
+          {/* Theme toggle */}
+          <button
+            onClick={onToggleDarkMode}
+            className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            title={darkMode ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+          >
+            {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+          </button>
+
+          {/* User Profile Avatar / Sign In */}
+          {user ? (
+            <button
+              onClick={onOpenSettings}
+              className="flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1 rounded-full border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                {user.displayName?.[0] || 'U'}
+              </div>
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 hidden sm:inline max-w-[90px] truncate">
+                {user.displayName?.split(' ')[0] || 'Account'}
               </span>
             </button>
           ) : (
             <button
               onClick={onOpenAuth}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition text-xs font-bold shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              title="Sign in / Account"
             >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>লগইন / সাইন আপ</span>
+              <UserIcon className="w-4 h-4" />
             </button>
           )}
-
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            aria-label="Toggle navigation menu"
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
         </div>
       </div>
-
-      {/* Subheader Tool Switcher on Tablet & Mobile */}
-      <div className="lg:hidden flex items-center justify-around border-t border-slate-100 dark:border-slate-800/80 px-1 py-1.5 bg-slate-50 dark:bg-slate-950 text-[11px] font-bold">
-        <button
-          onClick={() => onTabChange('metadata-remover')}
-          className={`py-1.5 px-2 rounded-lg transition flex items-center gap-1 ${
-            activeTab === 'metadata-remover'
-              ? 'bg-blue-600 text-white'
-              : 'text-slate-600 dark:text-slate-400'
-          }`}
-        >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Remover</span>
-        </button>
-        <button
-          onClick={() => onTabChange('bg-remover')}
-          className={`py-1.5 px-2 rounded-lg transition flex items-center gap-1 ${
-            activeTab === 'bg-remover'
-              ? 'bg-rose-600 text-white'
-              : 'text-slate-600 dark:text-slate-400'
-          }`}
-        >
-          <Scissors className="w-3.5 h-3.5" />
-          <span>BG Cut</span>
-        </button>
-        <button
-          onClick={() => onTabChange('converter')}
-          className={`py-1.5 px-2 rounded-lg transition flex items-center gap-1 ${
-            activeTab === 'converter'
-              ? 'bg-blue-600 text-white'
-              : 'text-slate-600 dark:text-slate-400'
-          }`}
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Convert</span>
-        </button>
-        <button
-          onClick={() => onTabChange('compressor')}
-          className={`py-1.5 px-2 rounded-lg transition flex items-center gap-1 ${
-            activeTab === 'compressor'
-              ? 'bg-blue-600 text-white'
-              : 'text-slate-600 dark:text-slate-400'
-          }`}
-        >
-          <Minimize2 className="w-3.5 h-3.5" />
-          <span>Compress</span>
-        </button>
-        <button
-          onClick={() => onTabChange('history')}
-          className={`py-1.5 px-2 rounded-lg transition flex items-center gap-1 ${
-            activeTab === 'history'
-              ? 'bg-blue-600 text-white'
-              : 'text-slate-600 dark:text-slate-400'
-          }`}
-        >
-          <History className="w-3.5 h-3.5" />
-          <span>History</span>
-        </button>
-      </div>
-
-      {/* Mobile Menu Drawer */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 space-y-2">
-          <button
-            onClick={() => {
-              setMobileMenuOpen(false);
-              onOpenHowItWorks();
-            }}
-            className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
-          >
-            <HelpCircle className="w-4 h-4 text-blue-600" />
-            How It Works
-          </button>
-          <button
-            onClick={() => {
-              setMobileMenuOpen(false);
-              onOpenPrivacy();
-            }}
-            className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
-          >
-            <Shield className="w-4 h-4 text-blue-600" />
-            Privacy Policy
-          </button>
-
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-            {user ? (
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenAccount();
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
-              >
-                <UserIcon className="w-4 h-4 text-blue-600" />
-                <span>Account ({user.displayName || user.email})</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenAuth();
-                }}
-                className="w-full py-2.5 px-3 rounded-xl bg-blue-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xs"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>লগইন / সাইন আপ</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </header>
   );
 };

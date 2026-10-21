@@ -176,12 +176,127 @@ export async function extractMetadata(source: File | Blob): Promise<DetectedMeta
     result.focalLength = getDesc(allTags['FocalLength']);
     result.artistOrCopyright = getDesc(allTags['Artist'] || allTags['Copyright']);
 
+    // Detect AI Generation or Synthetic Media Signatures
+    let isAi = false;
+    let aiTool: string | undefined = undefined;
+    let aiPrompt: string | undefined = undefined;
+
+    // 1. Check tags list for AI software / parameters
+    for (const tag of tagList) {
+      const lowerName = tag.name.toLowerCase();
+      const lowerVal = tag.value.toLowerCase();
+
+      if (
+        lowerName.includes('software') ||
+        lowerName.includes('creatortool') ||
+        lowerName.includes('processingsoftware') ||
+        lowerName.includes('history')
+      ) {
+        if (lowerVal.includes('midjourney')) {
+          isAi = true;
+          aiTool = 'Midjourney AI';
+        } else if (lowerVal.includes('stable diffusion') || lowerVal.includes('stablediffusion')) {
+          isAi = true;
+          aiTool = 'Stable Diffusion';
+        } else if (lowerVal.includes('dall-e') || lowerVal.includes('dalle')) {
+          isAi = true;
+          aiTool = 'OpenAI DALL-E';
+        } else if (lowerVal.includes('firefly') || lowerVal.includes('generative fill')) {
+          isAi = true;
+          aiTool = 'Adobe Firefly AI';
+        } else if (lowerVal.includes('comfyui')) {
+          isAi = true;
+          aiTool = 'ComfyUI';
+        } else if (lowerVal.includes('novelai')) {
+          isAi = true;
+          aiTool = 'NovelAI';
+        } else if (lowerVal.includes('leonardo')) {
+          isAi = true;
+          aiTool = 'Leonardo.Ai';
+        } else if (lowerVal.includes('bing') && lowerVal.includes('image creator')) {
+          isAi = true;
+          aiTool = 'Bing Image Creator (DALL-E)';
+        }
+      }
+
+      if (
+        lowerName.includes('parameter') ||
+        lowerName.includes('prompt') ||
+        lowerName.includes('workflow') ||
+        lowerName.includes('usercomment') ||
+        lowerName.includes('description')
+      ) {
+        if (
+          lowerVal.includes('steps:') ||
+          lowerVal.includes('sampler:') ||
+          lowerVal.includes('cfg scale:') ||
+          lowerVal.includes('negative prompt:') ||
+          lowerVal.includes('model hash:') ||
+          lowerVal.includes('seed:') ||
+          lowerVal.includes('--ar ') ||
+          lowerVal.includes('--v ') ||
+          lowerVal.includes('midjourney')
+        ) {
+          isAi = true;
+          if (!aiTool) aiTool = lowerVal.includes('--v ') ? 'Midjourney AI' : 'Stable Diffusion / WebUI';
+          if (!aiPrompt) aiPrompt = tag.value.substring(0, 160);
+        }
+      }
+    }
+
+    // 2. Binary text inspection for PNG/JPEG headers (tEXt / XMP chunks not captured by ExifReader)
+    if (!isAi) {
+      try {
+        const textSlice = new Uint8Array(arrayBuffer.slice(0, Math.min(arrayBuffer.byteLength, 128 * 1024)));
+        const rawString = new TextDecoder('utf-8', { fatal: false }).decode(textSlice);
+        const lowerRaw = rawString.toLowerCase();
+
+        if (lowerRaw.includes('midjourney')) {
+          isAi = true;
+          aiTool = 'Midjourney AI';
+        } else if (lowerRaw.includes('stable diffusion') || lowerRaw.includes('stablediffusion') || lowerRaw.includes('automatic1111')) {
+          isAi = true;
+          aiTool = 'Stable Diffusion';
+        } else if (lowerRaw.includes('dall-e') || lowerRaw.includes('dalle')) {
+          isAi = true;
+          aiTool = 'OpenAI DALL-E';
+        } else if (lowerRaw.includes('firefly') || lowerRaw.includes('generative fill')) {
+          isAi = true;
+          aiTool = 'Adobe Firefly AI';
+        } else if (lowerRaw.includes('comfyui')) {
+          isAi = true;
+          aiTool = 'ComfyUI';
+        } else if (lowerRaw.includes('flux.1') || lowerRaw.includes('black-forest-labs')) {
+          isAi = true;
+          aiTool = 'FLUX AI';
+        } else if (
+          (lowerRaw.includes('negative prompt:') || lowerRaw.includes('steps: ')) &&
+          (lowerRaw.includes('sampler:') || lowerRaw.includes('cfg scale:'))
+        ) {
+          isAi = true;
+          aiTool = 'Stable Diffusion AI';
+        }
+      } catch {
+        // Ignore binary scan errors
+      }
+    }
+
+    result.isAiGenerated = isAi;
+    result.aiToolOrSoftware = aiTool;
+    result.aiPromptSnippet = aiPrompt;
+
+    // Check if image is purely a digital graphic / screenshot without physical sensor tags
+    const hasCamera = Boolean(result.cameraMake || result.cameraModel || result.lensModel);
+    result.isDigitalGraphic = !hasCamera && !result.hasGps;
+
     result.tagList = tagList;
     result.allTagsCount = tagList.length;
   } catch {
     // If parsing fails or image has no metadata headers, it is safely treated as zero tags
     result.allTagsCount = 0;
     result.tagList = [];
+    result.hasGps = false;
+    result.isDigitalGraphic = true;
   }
 
   return result;

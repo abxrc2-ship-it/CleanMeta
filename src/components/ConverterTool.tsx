@@ -103,7 +103,22 @@ export const ConverterTool: React.FC<ConverterToolProps> = ({ user, onOpenAuth, 
     if (e.target.files && e.target.files.length > 0) {
       addFiles(e.target.files);
     }
+    if (e.target) e.target.value = '';
   };
+
+  // Paste support (Ctrl+V) in converter
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+        e.preventDefault();
+        addFiles(e.clipboardData.files);
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, []);
 
   const handleAppendFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {

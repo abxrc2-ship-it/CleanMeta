@@ -225,8 +225,12 @@ export const MetadataModal: React.FC<MetadataModalProps> = ({ photo, onClose }) 
                       <div>
                         Device: <strong>{originalMeta.cameraMake} {originalMeta.cameraModel}</strong>
                       </div>
+                    ) : originalMeta?.isAiGenerated ? (
+                      <div className="text-purple-600 dark:text-purple-400 font-semibold">
+                        No Physical Camera (AI Generated Image)
+                      </div>
                     ) : (
-                      <div className="text-slate-500">Camera model not specified</div>
+                      <div className="text-slate-500">Camera model not specified (Digital / Web Image)</div>
                     )}
                     {originalMeta?.lensModel && (
                       <div className="truncate">Lens: {originalMeta.lensModel}</div>
@@ -265,7 +269,11 @@ export const MetadataModal: React.FC<MetadataModalProps> = ({ photo, onClose }) 
                     </span>
                   </div>
                   <div className="mt-2 text-xs text-slate-600 dark:text-slate-300 truncate">
-                    {originalMeta?.software ? (
+                    {originalMeta?.isAiGenerated ? (
+                      <span className="text-purple-600 dark:text-purple-400 font-bold">
+                        {originalMeta.aiToolOrSoftware || 'AI Engine (Synthetic Media)'}
+                      </span>
+                    ) : originalMeta?.software ? (
                       <span>{originalMeta.software}</span>
                     ) : (
                       <span className="text-slate-500">No software tag specified</span>

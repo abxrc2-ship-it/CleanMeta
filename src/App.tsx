@@ -5,42 +5,116 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
-import { Hero } from './components/Hero';
+import { Sidebar } from './components/Sidebar';
+import { HomeView } from './components/HomeView';
+import { ImageMetadataRemoverWorkspace } from './components/ImageMetadataRemoverWorkspace';
 import { UploadZone } from './components/UploadZone';
 import { QueueList } from './components/QueueList';
 import { MetadataModal } from './components/MetadataModal';
 import { CompareModal } from './components/CompareModal';
 import { HowItWorksModal } from './components/HowItWorksModal';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
-import { AccountModal } from './components/AccountModal';
 import { AuthModal } from './components/AuthModal';
+import { SettingsModal } from './components/SettingsModal';
+
+// Image Tools
 import { ConverterTool } from './components/ConverterTool';
 import { CompressorTool } from './components/CompressorTool';
-import { BackgroundRemoverTool } from './components/BackgroundRemoverTool';
+import { ImageResizerTool } from './components/ImageResizerTool';
+import { ViewMetadataTool } from './components/ViewMetadataTool';
+import { EditMetadataTool } from './components/EditMetadataTool';
+import { CompareImagesTool } from './components/CompareImagesTool';
+
+// PDF Tools Suite (14 tools)
+import { PdfToolsSuite } from './components/PdfToolsSuite';
+
+// File & Video Tools
+import { FileToolsContainer } from './components/FileToolsContainer';
+import { VideoComingSoon } from './components/VideoComingSoon';
+
+// SaaS Directory Views
+import { AllToolsDirectory } from './components/AllToolsDirectory';
+import { MyFilesView } from './components/MyFilesView';
+import { FavoritesView } from './components/FavoritesView';
+import { PricingView } from './components/PricingView';
+import { HelpAboutView } from './components/HelpAboutView';
 import { HistoryView } from './components/HistoryView';
 import { Footer } from './components/Footer';
-import { CleanFormatPreference, PhotoItem, RetentionPreference, ToolType, UserProfile } from './types';
+
+import {
+  CleanFormatPreference,
+  NavigationTab,
+  PhotoItem,
+  RetentionPreference,
+  StoredFileItem,
+  UserProfile,
+} from './types';
 import { extractMetadata } from './lib/metadata';
 import { processAndCleanImage } from './lib/imageProcessor';
 import { downloadCleanPhotosAsZip } from './lib/zipDownloader';
-import { subscribeToAuthState } from './lib/firebase';
+import { subscribeToAuthState, signOutUser } from './lib/firebase';
 import { saveHistoryRecord } from './lib/firestore';
 import { uploadToVercelBlob } from './lib/blobStorage';
-import { Sparkles, Wifi, WifiOff, Cloud } from 'lucide-react';
+import { getCleanMetaFilename } from './lib/naming';
 
 export default function App() {
   // Theme state
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('cleanmeta-theme');
     if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return false; // Light theme default per design
   });
+
+  // Mobile sidebar drawer state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // User auth state
   const [user, setUser] = useState<UserProfile | null>(null);
 
   // Active navigation tab
-  const [activeTab, setActiveTab] = useState<ToolType | 'history'>('metadata-remover');
+  const [activeTab, setActiveTab] = useState<NavigationTab>('home');
+
+  // Favorites state
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('cleanmeta-favorites');
+      return saved ? JSON.parse(saved) : ['metadata-remover', 'image-resizer', 'pdf-organize', 'converter'];
+    } catch {
+      return ['metadata-remover', 'image-resizer', 'pdf-organize', 'converter'];
+    }
+  });
+
+  const toggleFavorite = (toolId: string) => {
+    setFavorites((prev) => {
+      const updated = prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId];
+      localStorage.setItem('cleanmeta-favorites', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Stored Files for "My Files"
+  const [storedFiles, setStoredFiles] = useState<StoredFileItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('cleanmeta-stored-files');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleDeleteStoredFile = (id: string) => {
+    setStoredFiles((prev) => {
+      const updated = prev.filter((f) => f.id !== id);
+      localStorage.setItem('cleanmeta-stored-files', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleClearLocalVault = () => {
+    setStoredFiles([]);
+    setPhotos([]);
+    localStorage.removeItem('cleanmeta-stored-files');
+  };
 
   // Metadata Remover state
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
@@ -50,33 +124,12 @@ export default function App() {
   const [isZipping, setIsZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
 
-  // Online / Offline status & App mode (Local vs Cloud)
-  const [isOnline, setIsOnline] = useState<boolean>(() =>
-    typeof navigator !== 'undefined' ? navigator.onLine : true
-  );
-  const [appMode, setAppMode] = useState<'local' | 'cloud'>('local');
-
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => {
-      setIsOnline(false);
-      setAppMode('local');
-      setRetentionPreference('none');
-    };
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
   // Modals state
   const [inspectingPhoto, setInspectingPhoto] = useState<PhotoItem | null>(null);
   const [comparingPhoto, setComparingPhoto] = useState<PhotoItem | null>(null);
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const photosRef = useRef(photos);
@@ -125,6 +178,9 @@ export default function App() {
 
     setPhotos((prev) => [...prev, ...newItems]);
 
+    // Automatically switch to metadata-remover workspace so user sees their photos
+    setActiveTab((prev) => (prev === 'home' ? 'metadata-remover' : prev));
+
     for (const item of newItems) {
       try {
         const metadata = await extractMetadata(item.file);
@@ -168,443 +224,278 @@ export default function App() {
     }
   }, []);
 
-  // Remove individual photo
+  // Global document paste handler (Ctrl+V / Cmd+V)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.clipboardData?.items) {
+        const imageFiles: File[] = [];
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          const item = e.clipboardData.items[i];
+          if (item.type.startsWith('image/')) {
+            const blob = item.getAsFile();
+            if (blob) {
+              const extension = item.type.split('/')[1] || 'png';
+              const file = new File(
+                [blob],
+                `pasted-photo-${Date.now()}-${i + 1}.${extension}`,
+                { type: item.type }
+              );
+              imageFiles.push(file);
+            }
+          }
+        }
+
+        if (imageFiles.length > 0) {
+          e.preventDefault();
+          if (activeTab !== 'metadata-remover') {
+            setActiveTab('metadata-remover');
+          }
+          handleFilesSelected(imageFiles);
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [activeTab, handleFilesSelected]);
+
+  // Remove photo from queue
   const handleRemovePhoto = (id: string) => {
-    const target = photos.find((p) => p.id === id);
-    if (target) {
-      if (target.originalUrl) URL.revokeObjectURL(target.originalUrl);
-      if (target.cleanedUrl) URL.revokeObjectURL(target.cleanedUrl);
-    }
-    setPhotos((prev) => prev.filter((p) => p.id !== id));
-    if (inspectingPhoto?.id === id) setInspectingPhoto(null);
-    if (comparingPhoto?.id === id) setComparingPhoto(null);
+    setPhotos((prev) => {
+      const photo = prev.find((p) => p.id === id);
+      if (photo?.originalUrl) URL.revokeObjectURL(photo.originalUrl);
+      if (photo?.cleanedUrl) URL.revokeObjectURL(photo.cleanedUrl);
+      return prev.filter((p) => p.id !== id);
+    });
   };
 
-  // Clear entire queue
+  // Clear queue
   const handleClearQueue = () => {
     photos.forEach((p) => {
       if (p.originalUrl) URL.revokeObjectURL(p.originalUrl);
       if (p.cleanedUrl) URL.revokeObjectURL(p.cleanedUrl);
     });
     setPhotos([]);
-    setInspectingPhoto(null);
-    setComparingPhoto(null);
   };
 
-  // Process a single photo item (immediate UI update!)
-  const processPhotoItem = async (photo: PhotoItem, formatPref: CleanFormatPreference) => {
-    try {
-      const result = await processAndCleanImage(photo.file, {
-        formatPreference: formatPref,
-        quality: 0.95,
-      });
-
-      const cleanedUrl = URL.createObjectURL(result.blob);
-
-      // 1. Instantly mark as cleaned in UI (stops spinning immediately!)
-      setPhotos((prev) =>
-        prev.map((p) =>
-          p.id === photo.id
-            ? {
-                ...p,
-                status: 'cleaned',
-                cleanedBlob: result.blob,
-                cleanedUrl,
-                cleanedSize: result.blob.size,
-                cleanedDimensions: { width: result.width, height: result.height },
-                cleanedFormat: result.outputFormat,
-                cleanedMetadataVerification: result.verification,
-              }
-            : p
-        )
-      );
-
-      // 2. Perform cloud upload & history save in the background
-      (async () => {
-        let blobUrl: string | undefined;
-        let blobPathname: string | undefined;
-        let expiresAt: number | undefined;
-
-        if (retentionPreference !== 'none' && user) {
-          try {
-            const uploadRes = await uploadToVercelBlob(
-              result.blob,
-              `clean-${photo.name}`,
-              retentionPreference,
-              'metadata-remover'
-            );
-            if (uploadRes.success) {
-              blobUrl = uploadRes.blobUrl;
-              blobPathname = uploadRes.blobPathname;
-              expiresAt = uploadRes.expiresAt;
-            }
-          } catch (e: any) {
-            console.warn('Background upload notice:', e.message);
-          }
-        }
-
-        if (user) {
-          saveHistoryRecord(user.uid, {
-            tool: 'metadata-remover',
-            originalFileName: photo.name,
-            inputFormat: photo.type,
-            outputFormat: result.outputFormat,
-            originalSize: photo.size,
-            processedSize: result.blob.size,
-            status: 'success',
-            retention: retentionPreference,
-            blobUrl,
-            blobPathname,
-            expiresAt,
-          }).catch(() => {});
-        }
-      })();
-    } catch (err: any) {
-      setPhotos((prev) =>
-        prev.map((p) =>
-          p.id === photo.id
-            ? {
-                ...p,
-                status: 'error',
-                errorMessage: err.message || 'Failed to process image.',
-              }
-            : p
-        )
-      );
-    }
-  };
-
-  // Process all queued photos
-  const handleProcessAll = async () => {
-    const pendingPhotos = photos.filter((p) => p.status === 'queued' || p.status === 'error');
-    if (pendingPhotos.length === 0) return;
-
-    try {
-      setIsProcessing(true);
-
-      for (const photo of pendingPhotos) {
-        setPhotos((prev) =>
-          prev.map((p) => (p.id === photo.id ? { ...p, status: 'processing', errorMessage: undefined } : p))
-        );
-
-        await processPhotoItem(photo, formatPreference);
-      }
-    } catch (err) {
-      console.error('Batch process error:', err);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Retry individual photo
-  const handleRetryPhoto = async (id: string) => {
-    const photo = photos.find((p) => p.id === id);
-    if (!photo) return;
-
-    try {
-      setPhotos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: 'processing', errorMessage: undefined } : p))
-      );
-
-      await processPhotoItem(photo, formatPreference);
-    } catch (err: any) {
-      setPhotos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: 'error', errorMessage: err.message || 'Retry failed.' } : p))
-      );
-    }
-  };
-
-  // Download ZIP
+  // Download all cleaned as ZIP
   const handleDownloadZip = async () => {
+    const cleaned = photos.filter((p) => p.status === 'cleaned' && p.cleanedBlob);
+    if (cleaned.length === 0) return;
+
     try {
       setIsZipping(true);
       setZipProgress(0);
-      await downloadCleanPhotosAsZip(photos, (pct) => setZipProgress(pct));
-    } catch (err: any) {
-      alert(err.message || 'Unable to generate ZIP archive.');
+      await downloadCleanPhotosAsZip(photos, (prog) => {
+        setZipProgress(prog);
+      });
+    } catch (err) {
+      console.error('ZIP creation failed:', err);
     } finally {
       setIsZipping(false);
       setZipProgress(0);
     }
   };
 
-  // Transfer output from one tool to another pipeline
-  const handleTransferToTool = (tool: ToolType, file: File) => {
-    setActiveTab(tool);
-    if (tool === 'metadata-remover') {
-      handleFilesSelected([file]);
-    }
-  };
-
-  // Helper demo sample photo
-  const handleLoadSamplePhoto = async () => {
-    try {
-      const sampleCanvas = document.createElement('canvas');
-      sampleCanvas.width = 1200;
-      sampleCanvas.height = 800;
-      const ctx = sampleCanvas.getContext('2d');
-      if (ctx) {
-        const grad = ctx.createLinearGradient(0, 0, 0, 800);
-        grad.addColorStop(0, '#1e3a8a');
-        grad.addColorStop(0.5, '#3b82f6');
-        grad.addColorStop(0.8, '#93c5fd');
-        grad.addColorStop(1, '#fde047');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 1200, 800);
-
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.arc(600, 360, 90, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#1e293b';
-        ctx.beginPath();
-        ctx.moveTo(0, 800);
-        ctx.lineTo(350, 420);
-        ctx.lineTo(700, 800);
-        ctx.fill();
-
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.moveTo(450, 800);
-        ctx.lineTo(850, 480);
-        ctx.lineTo(1200, 800);
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 36px sans-serif';
-        ctx.fillText('CleanMeta Sample Photo', 60, 100);
-        ctx.font = '20px sans-serif';
-        ctx.fillText('Ready for metadata removal test', 60, 140);
-      }
-
-      sampleCanvas.toBlob((blob) => {
-        if (blob) {
-          const sampleFile = new File([blob], 'vacation_mountain_sunset.jpg', {
-            type: 'image/jpeg',
-          });
-          handleFilesSelected([sampleFile]);
-        }
-      }, 'image/jpeg', 0.95);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
-      {/* Header */}
-      <Header
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode(!darkMode)}
-        user={user}
+    <div className="min-h-screen flex bg-[#f8fafe] dark:bg-black text-slate-900 dark:text-neutral-100 transition-colors font-sans antialiased">
+      {/* 240px Persistent Sidebar on desktop & slide-out on mobile */}
+      <Sidebar
         activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onOpenAccount={() => setAccountOpen(true)}
-        onOpenHowItWorks={() => setHowItWorksOpen(true)}
-        onOpenPrivacy={() => setPrivacyOpen(true)}
-        onOpenAuth={() => setAuthModalOpen(true)}
-        isOnline={isOnline}
-        activeMode={appMode}
-        onToggleMode={() => {
-          if (appMode === 'local') {
-            if (!user) {
-              setAuthModalOpen(true);
-            } else {
-              setAppMode('cloud');
-              if (retentionPreference === 'none') {
-                setRetentionPreference('4days');
-              }
-            }
-          } else {
-            setAppMode('local');
-            setRetentionPreference('none');
-          }
+        onNavigate={(tab) => {
+          setActiveTab(tab);
+          setSidebarOpen(false);
         }}
+        favoritesCount={favorites.length}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
-      {/* Online & Offline Dual Mode Selector Banner */}
-      <div className="w-full max-w-4xl mx-auto px-4 pt-4">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 sm:px-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                !isOnline
-                  ? 'bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400'
-                  : appMode === 'local'
-                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400'
-                  : 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400'
-              }`}
-            >
-              {!isOnline ? (
-                <WifiOff className="w-4 h-4" />
-              ) : appMode === 'local' ? (
-                <Wifi className="w-4 h-4" />
-              ) : (
-                <Cloud className="w-4 h-4" />
-              )}
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                  {!isOnline
-                    ? 'অফলাইন মোড (লোকাল ইঞ্জিন সক্রিয়)'
-                    : appMode === 'local'
-                    ? 'লোকাল মোড (১০০% অফলাইন ও প্রাইভেট)'
-                    : 'ক্লাউড স্টোরেজ মোড (অনলাইন ব্যাকআপ)'}
-                </span>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    !isOnline
-                      ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                      : appMode === 'local'
-                      ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                      : 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                  }`}
-                >
-                  {!isOnline ? 'Offline Safe' : appMode === 'local' ? '100% Local / Zero Upload' : 'Cloud Sync Active'}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                {!isOnline
-                  ? 'ইন্টারনেট ছাড়াই সমস্ত টুল সম্পূর্ণ কাজ করছে। ছবি সরাসরি আপনার ডিভাইসে সেভ হবে।'
-                  : appMode === 'local'
-                  ? 'কোনো সার্ভারে আপলোড নেই। ছবি ব্রাউজার মেমোরিতে প্রসেস ও সরাসরি ডাউনলোড হয়।'
-                  : 'প্রসেস করা ছবি নিরাপদে আপনার ক্লাউড স্টোরেজে সেভ থাকবে (সর্বোচ্চ মেয়াদ পর্যন্ত)।'}
-              </p>
-            </div>
-          </div>
+      {/* Main content wrapper shifted 240px on desktop */}
+      <div className="flex-1 lg:pl-60 flex flex-col min-h-screen w-full">
+        {/* Navigation Header */}
+        <Header
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(!darkMode)}
+          user={user}
+          activeTab={activeTab}
+          onTabChange={(tab) => setActiveTab(tab)}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          favoritesCount={favorites.length}
+        />
 
-          {/* Quick Toggle Controls */}
-          <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                setAppMode('local');
-                setRetentionPreference('none');
-              }}
-              className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                appMode === 'local'
-                  ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <Wifi className="w-3.5 h-3.5" />
-              <span>লোকাল (অফলাইন)</span>
-            </button>
+        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col">
+          {/* VIEW 1: HOME PAGE (Matches image_05161161.png with Pinned Favorites Shelf & 3D Interactive Hero) */}
+          {activeTab === 'home' && (
+            <HomeView
+              onNavigate={(tab) => setActiveTab(tab)}
+              onOpenHowItWorks={() => setHowItWorksOpen(true)}
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
+              darkMode={darkMode}
+            />
+          )}
 
-            <button
-              type="button"
-              onClick={() => {
-                if (!user) {
-                  setAuthModalOpen(true);
-                } else {
-                  setAppMode('cloud');
-                  if (retentionPreference === 'none') {
-                    setRetentionPreference('4days');
-                  }
-                }
-              }}
-              className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                appMode === 'cloud'
-                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <Cloud className="w-3.5 h-3.5" />
-              <span>ক্লাউড স্টোরেজ</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Rendered According to Active Tab */}
-      <main className="flex-1 flex flex-col">
-        {activeTab === 'metadata-remover' && (
-          <>
-            <Hero />
-            <UploadZone onFilesSelected={handleFilesSelected} isProcessing={isProcessing} />
-
-            {photos.length === 0 && (
-              <div className="text-center mt-5 mb-8">
-                <button
-                  onClick={handleLoadSamplePhoto}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-900 transition cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Don't have a photo handy? Try a sample photo</span>
-                </button>
-              </div>
-            )}
-
-            <QueueList
+          {/* VIEW 2: IMAGE METADATA REMOVER WORKSPACE (Matches image_66a5d8d0.png) */}
+          {activeTab === 'metadata-remover' && (
+            <ImageMetadataRemoverWorkspace
               photos={photos}
+              onAddPhotos={handleFilesSelected}
               onRemovePhoto={handleRemovePhoto}
               onClearQueue={handleClearQueue}
-              onProcessAll={handleProcessAll}
-              onRetryPhoto={handleRetryPhoto}
               onDownloadZip={handleDownloadZip}
-              onInspectMetadata={(photo) => setInspectingPhoto(photo)}
-              onComparePhoto={(photo) => setComparingPhoto(photo)}
               formatPreference={formatPreference}
               onChangeFormatPreference={setFormatPreference}
               retentionPreference={retentionPreference}
-              onChangeRetentionPreference={(r) => {
-                if (r !== 'none' && !user) {
-                  setAuthModalOpen(true);
-                } else {
-                  setRetentionPreference(r);
-                }
-              }}
-              onSendToTool={handleTransferToTool}
-              isProcessing={isProcessing}
-              isZipping={isZipping}
-              zipProgress={zipProgress}
+              onChangeRetentionPreference={setRetentionPreference}
             />
-          </>
-        )}
+          )}
 
-        {activeTab === 'bg-remover' && (
-          <BackgroundRemoverTool
-            user={user}
-            onSendToTool={handleTransferToTool}
+          {/* IMAGE TOOLS */}
+          {activeTab === 'image-resizer' && <ImageResizerTool />}
+          {activeTab === 'converter' && (
+            <ConverterTool
+              user={user}
+              onOpenAuth={() => setAuthModalOpen(true)}
+              onSendToTool={(tool) => setActiveTab(tool)}
+            />
+          )}
+          {activeTab === 'compressor' && (
+            <CompressorTool
+              user={user}
+              onOpenAuth={() => setAuthModalOpen(true)}
+              onSendToTool={(tool) => setActiveTab(tool)}
+            />
+          )}
+          {activeTab === 'image-compare' && <CompareImagesTool />}
+          {activeTab === 'metadata-viewer' && <ViewMetadataTool />}
+          {activeTab === 'metadata-editor' && <EditMetadataTool />}
+          {activeTab === 'image-tools' && (
+            <AllToolsDirectory
+              initialCategory="image"
+              onSelectTool={(t) => setActiveTab(t)}
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
+            />
+          )}
+
+          {/* PDF TOOLS SUITE (14 tools, matches image_2d761233.png & image_15c2dc79.png) */}
+          {(activeTab === 'pdf-tools' || activeTab.startsWith('pdf-') || activeTab === 'images-to-pdf') && (
+            <PdfToolsSuite
+              initialSubTool={
+                activeTab.startsWith('pdf-') || activeTab === 'images-to-pdf'
+                  ? (activeTab as any)
+                  : 'pdf-viewer'
+              }
+              onToolSelect={(sub) => setActiveTab(sub)}
+            />
+          )}
+
+          {/* FILE TOOLS (Matches image_2b1361a4.png) */}
+          {(activeTab === 'file-tools' || activeTab.startsWith('file-')) && (
+            <FileToolsContainer
+              initialSubTool={activeTab.startsWith('file-') ? (activeTab as any) : 'file-compare'}
+            />
+          )}
+
+          {/* VIDEO TOOLS (ROADMAP / COMING SOON) */}
+          {(activeTab === 'video-tools' || activeTab.startsWith('video-')) && <VideoComingSoon />}
+
+          {/* ALL TOOLS DIRECTORY */}
+          {activeTab === 'all-tools' && (
+            <AllToolsDirectory
+              onSelectTool={(t) => setActiveTab(t)}
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
+            />
+          )}
+
+          {/* SAAS ACCOUNT / VAULT / PRICING / HELP */}
+          {activeTab === 'my-files' && (
+            <MyFilesView
+              user={user}
+              files={storedFiles}
+              onDeleteFile={handleDeleteStoredFile}
+              onOpenAuth={() => setAuthModalOpen(true)}
+            />
+          )}
+
+          {activeTab === 'history' && (
+            <HistoryView user={user} onOpenAuth={() => setAuthModalOpen(true)} />
+          )}
+
+          {activeTab === 'favorites' && (
+            <FavoritesView
+              favorites={favorites}
+              onSelectTool={(t) => setActiveTab(t)}
+              onToggleFavorite={toggleFavorite}
+            />
+          )}
+
+          {activeTab === 'pricing' && <PricingView />}
+          {(activeTab === 'help' || activeTab === 'about') && <HelpAboutView />}
+        </main>
+
+        {/* Global Modals */}
+        <SettingsModal
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(!darkMode)}
+          retentionPreference={retentionPreference}
+          onSelectRetention={setRetentionPreference}
+          user={user}
+          onSignOut={() => signOutUser().then(() => setUser(null))}
+          onClearLocalVault={handleClearLocalVault}
+        />
+
+        {inspectingPhoto && (
+          <MetadataModal
+            photo={inspectingPhoto}
+            onClose={() => setInspectingPhoto(null)}
           />
         )}
 
-        {activeTab === 'converter' && (
-          <ConverterTool
-            user={user}
-            onOpenAuth={() => setAuthModalOpen(true)}
-            onSendToTool={handleTransferToTool}
+        {comparingPhoto && (
+          <CompareModal
+            photo={comparingPhoto}
+            onClose={() => setComparingPhoto(null)}
           />
         )}
 
-        {activeTab === 'compressor' && (
-          <CompressorTool
-            user={user}
-            onOpenAuth={() => setAuthModalOpen(true)}
-            onSendToTool={handleTransferToTool}
-          />
-        )}
+        <HowItWorksModal
+          isOpen={howItWorksOpen}
+          onClose={() => setHowItWorksOpen(false)}
+        />
 
-        {activeTab === 'history' && (
-          <HistoryView user={user} onOpenAuth={() => setAuthModalOpen(true)} />
-        )}
-      </main>
+        <PrivacyPolicyModal
+          isOpen={privacyOpen}
+          onClose={() => setPrivacyOpen(false)}
+        />
 
-      {/* Footer */}
-      <Footer
-        onOpenHowItWorks={() => setHowItWorksOpen(true)}
-        onOpenPrivacy={() => setPrivacyOpen(true)}
-      />
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => setAuthModalOpen(false)}
+        />
 
-      {/* Modals */}
-      <MetadataModal photo={inspectingPhoto} onClose={() => setInspectingPhoto(null)} />
-      <CompareModal photo={comparingPhoto} onClose={() => setComparingPhoto(null)} />
-      <HowItWorksModal isOpen={howItWorksOpen} onClose={() => setHowItWorksOpen(false)} />
-      <PrivacyPolicyModal isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
-      <AccountModal isOpen={accountOpen} onClose={() => setAccountOpen(false)} user={user} />
-      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+        {/* Footer */}
+        <Footer
+          onOpenHowItWorks={() => setHowItWorksOpen(true)}
+          onOpenPrivacy={() => setPrivacyOpen(true)}
+        />
+      </div>
     </div>
   );
 }

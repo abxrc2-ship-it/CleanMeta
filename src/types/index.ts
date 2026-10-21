@@ -13,12 +13,19 @@ export interface DetectedMetadata {
   cameraModel?: string;
   lensModel?: string;
   dateTimeOriginal?: string;
+  dateTime?: string;
   software?: string;
   iso?: string;
   fNumber?: string;
+  aperture?: string;
   exposureTime?: string;
+  shutterSpeed?: string;
   focalLength?: string;
   artistOrCopyright?: string;
+  isAiGenerated?: boolean;
+  aiToolOrSoftware?: string;
+  aiPromptSnippet?: string;
+  isDigitalGraphic?: boolean;
   allTagsCount: number;
   tagList: TagDetail[];
 }
@@ -64,14 +71,63 @@ export interface UserProfile {
 
 export type CleanFormatPreference = 'auto' | 'jpeg' | 'png' | 'webp';
 
-export type ToolType = 'metadata-remover' | 'converter' | 'compressor' | 'bg-remover';
+// All 7 Image Tools
+export type ImageToolType =
+  | 'metadata-remover'
+  | 'metadata-editor'
+  | 'metadata-viewer'
+  | 'converter'
+  | 'compressor'
+  | 'image-compare'
+  | 'image-resizer';
+
+// All 14 PDF Tools
+export type PdfToolType =
+  | 'pdf-viewer'
+  | 'pdf-split'
+  | 'pdf-to-image'
+  | 'pdf-editor'
+  | 'pdf-merge'
+  | 'pdf-compress'
+  | 'pdf-organize'
+  | 'images-to-pdf'
+  | 'pdf-sign'
+  | 'pdf-ocr'
+  | 'pdf-protect'
+  | 'pdf-parser'
+  | 'pdf-asset-remover'
+  | 'pdf-compare';
+
+// All 2 File Tools
+export type FileToolType = 'file-asset-extract' | 'file-compare';
+
+// 3 Video Tools (Coming Soon)
+export type VideoToolType = 'video-editor' | 'video-compare' | 'video-streams';
+
+export type ToolType = ImageToolType | PdfToolType | FileToolType | VideoToolType;
+
+export type NavigationTab =
+  | 'home'
+  | 'all-tools'
+  | 'image-tools'
+  | 'pdf-tools'
+  | 'file-tools'
+  | 'video-tools'
+  | 'my-files'
+  | 'history'
+  | 'favorites'
+  | 'pricing'
+  | 'help'
+  | 'about'
+  | 'settings'
+  | ToolType;
 
 export type RetentionPreference = 'none' | '1day' | '2days' | '3days' | '4days' | '7days' | 'permanent';
 
 export interface HistoryRecord {
   id: string;
   userId: string;
-  tool: ToolType;
+  tool: string;
   originalFileName: string;
   inputFormat: string;
   outputFormat: string;
@@ -84,6 +140,19 @@ export interface HistoryRecord {
   blobUrl?: string;
   blobPathname?: string;
   expiresAt?: number;
+}
+
+export interface StoredFileItem {
+  id: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+  url: string;
+  createdAt: number;
+  expiresAt?: number;
+  sourceTool: string;
+  isLocalOnly: boolean;
+  blob?: Blob;
 }
 
 export interface ConversionOptions {
@@ -123,3 +192,24 @@ export interface CompressionOptions {
   index?: number;
 }
 
+export interface ResizeOptions {
+  width: number;
+  height: number;
+  lockAspectRatio: boolean;
+  fitMode: 'contain' | 'cover' | 'fill';
+  format: 'image/jpeg' | 'image/png' | 'image/webp';
+  quality: number;
+  backgroundColor: string;
+}
+
+export interface ToolDefinition {
+  id: ToolType;
+  title: string;
+  category: 'image' | 'pdf' | 'file' | 'video';
+  description: string;
+  icon: string;
+  badge?: string;
+  isComingSoon?: boolean;
+  isPopular?: boolean;
+  isNew?: boolean;
+}
